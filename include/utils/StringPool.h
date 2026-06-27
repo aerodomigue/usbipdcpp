@@ -17,7 +17,7 @@ public:
                 return index;
             }
         }
-        SPDLOG_CRITICAL("字符串池用完了");
+        SPDLOG_CRITICAL("String pool is exhausted");
         throw std::system_error(std::make_error_code(std::errc::no_buffer_space));
     }
 
@@ -32,7 +32,7 @@ public:
     void change_string(std::uint8_t index, const std::wstring &new_str) {
         std::lock_guard lock(string_pool_mutex);
         if (!string_pool.contains(index)) {
-            SPDLOG_CRITICAL("字符串索引 {} 无效", index);
+            SPDLOG_CRITICAL("String index {} is invalid", index);
             throw std::system_error(std::make_error_code(std::errc::invalid_argument));
         }
         string_pool[index] = new_str;

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <string>
 
-/// 创建带通用参数的 cxxopts::Options（--port, --busid, --help）。
+/// Create a cxxopts::Options with common arguments (--port, --busid, --help).
 inline cxxopts::Options make_example_options(const std::string &name, const std::string &desc) {
     cxxopts::Options opts(name, desc);
     opts.add_options()
@@ -15,7 +15,7 @@ inline cxxopts::Options make_example_options(const std::string &name, const std:
     return opts;
 }
 
-/// 标准解析 + 错误/帮助打印，成功返回 ParseResult。
+/// Standard parse + error/help printing, returns ParseResult on success.
 inline cxxopts::ParseResult parse_example_args(cxxopts::Options &opts, int argc, char **argv) {
     try {
         auto result = opts.parse(argc, argv);

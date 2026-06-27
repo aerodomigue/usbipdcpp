@@ -38,7 +38,7 @@ std::size_t StorageTransferOperator::get_actual_length(void *handle) {
 }
 
 UsbIpIsoPacketDescriptor StorageTransferOperator::get_iso_descriptor(void *, int) {
-    // MSC 没有等时传输
+    // MSC has no isochronous transfers
     return {};
 }
 
@@ -54,7 +54,7 @@ void StorageTransferOperator::send_transfer_data(void *handle, asio::ip::tcp::so
                  static_cast<const void *>(handle), length, trx->direct_io, trx->file_lba, trx->file_offset,
                  static_cast<const void *>(trx->external_buf));
 
-    // 仅 mmap READ 走零拷贝 sendfile/TransmitFile，CSW 等 fallback 数据不碰文件
+    // Only mmap READ uses zero-copy sendfile/TransmitFile; CSW and other fallback data do not touch the file
     if (trx->direct_io && backend &&
         backend->send_direct(trx->file_lba, trx->file_offset, length, static_cast<intptr_t>(sock.native_handle()),
                              ec)) {
@@ -63,7 +63,7 @@ void StorageTransferOperator::send_transfer_data(void *handle, asio::ip::tcp::so
     }
     ec.clear();
 
-    // 回退：从 external_buf / fallback_data 发送
+    // Fallback: send from external_buf / fallback_data
     void *buf = trx->external_buf ? trx->external_buf : trx->fallback_data.data();
     SPDLOG_DEBUG("STO::send fallback buf={:p}", static_cast<const void *>(buf));
     asio::write(sock, asio::buffer(static_cast<const char *>(buf), length), ec);
@@ -78,7 +78,7 @@ void StorageTransferOperator::recv_transfer_data(void *handle, asio::ip::tcp::so
                  static_cast<const void *>(handle), length, trx->direct_io, trx->file_lba, trx->file_offset,
                  static_cast<const void *>(trx->external_buf));
 
-    // 仅 mmap WRITE 走零拷贝 splice，CBW/staging 数据不碰文件
+    // Only mmap WRITE uses zero-copy splice; CBW/staging data does not touch the file
     if (trx->direct_io && trx->external_buf && backend &&
         backend->recv_direct(trx->file_lba, trx->file_offset, length, static_cast<intptr_t>(sock.native_handle()),
                              ec)) {
@@ -88,7 +88,7 @@ void StorageTransferOperator::recv_transfer_data(void *handle, asio::ip::tcp::so
     }
     ec.clear();
 
-    // 回退：直读到 external_buf 或 fallback_data
+    // Fallback: read directly into external_buf or fallback_data
     void *buf = trx->external_buf;
     if (buf) {
         SPDLOG_DEBUG("STO::recv fallback ext_buf={:p}", static_cast<const void *>(buf));

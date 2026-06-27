@@ -18,14 +18,14 @@ struct SetupPacket {
 
     using array_storage = array_data_type<8>;
 
-    //转成小端
+    // Convert to little-endian
     [[nodiscard]] array_storage to_bytes() const {
         array_storage result;
 
         result[0] = request_type;
         result[1] = request;
 
-        //小端，低位在低地址
+        // Little-endian: low byte at low address
         result[2] = value & 0xFF;
         result[3] = value >> 8;
 
@@ -47,9 +47,9 @@ struct SetupPacket {
     bool operator==(const SetupPacket &other) const = default;
 
     /**
-     * @brief 从字节数组中解析setup包，请万分注意，setup包使用小端序传输
-     * @param setup 字节数组
-     * @return 解析后的setup包
+     * @brief Parse a setup packet from a byte array. Note carefully: setup packets are transmitted in little-endian order.
+     * @param setup Byte array.
+     * @return Parsed setup packet.
      */
     static SetupPacket parse(const array_storage &setup) {
         return {
@@ -94,8 +94,8 @@ struct SetupPacket {
 
     [[nodiscard]] bool is_clear_halt_cmd() const {
         // Linux kernel: bRequestType == USB_RECIP_ENDPOINT (0x02)
-        // 即 Standard(0x00) + Endpoint(0x02) + OUT(0x00) = 0x02
-        // 必须完整检查，不能只看Recip
+        // i.e., Standard(0x00) + Endpoint(0x02) + OUT(0x00) = 0x02
+        // Must check the full value; cannot check Recip alone.
         return request == static_cast<std::uint8_t>(StandardRequest::ClearFeature) &&
                request_type == static_cast<std::uint8_t>(RequestRecipient::Endpoint) &&
                value == USB_ENDPOINT_HALT;
@@ -103,14 +103,14 @@ struct SetupPacket {
 
     [[nodiscard]] bool is_set_interface_cmd() const {
         // Linux kernel: bRequestType == USB_RECIP_INTERFACE (0x01)
-        // 即 Standard(0x00) + Interface(0x01) + OUT(0x00) = 0x01
+        // i.e., Standard(0x00) + Interface(0x01) + OUT(0x00) = 0x01
         return request == static_cast<std::uint8_t>(StandardRequest::SetInterface) &&
                request_type == static_cast<std::uint8_t>(RequestRecipient::Interface);
     }
 
     [[nodiscard]] bool is_set_configuration_cmd() const {
         // Linux kernel: bRequestType == USB_RECIP_DEVICE (0x00)
-        // 即 Standard(0x00) + Device(0x00) + OUT(0x00) = 0x00
+        // i.e., Standard(0x00) + Device(0x00) + OUT(0x00) = 0x00
         return request == static_cast<std::uint8_t>(StandardRequest::SetConfiguration) &&
                request_type == static_cast<std::uint8_t>(RequestRecipient::Device);
     }
@@ -135,8 +135,8 @@ struct SetupPacket {
 
     [[nodiscard]] bool is_reset_device_cmd() const {
         // Linux kernel: bRequestType == USB_RT_PORT (0x23)
-        // 即 Class(0x20) + Other(0x03) + OUT(0x00) = 0x23
-        // 必须完整检查bRequestType，不能分开检查Type和Recip而忽略Dir
+        // i.e., Class(0x20) + Other(0x03) + OUT(0x00) = 0x23
+        // Must check the full bRequestType; cannot check Type and Recip separately while ignoring Dir.
         if ((request == static_cast<std::uint8_t>(StandardRequest::SetFeature)) &&
             (request_type == (static_cast<std::uint8_t>(RequestType::Class) |
                               static_cast<std::uint8_t>(RequestRecipient::Other))) &&

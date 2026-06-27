@@ -1,13 +1,13 @@
-协议解析部分的修改请务必慎重，这部分是调试很久的结果，其他架构部分可以修改。
+Be very careful when modifying the protocol parsing section — it is the result of extensive debugging. Other architectural parts can be modified.
 
-改各种api时需要考虑这种嵌入式平台的实现难易度
+When changing various APIs, consider the implementation difficulty on embedded platforms.
 
-这个项目的开源协议是lgpl，别搞混了
+The open-source license for this project is LGPL — don't confuse it with others.
 
-别主动提交git，我叫你提交再提交
+Do not proactively commit to git; only commit when I ask you to.
 
-成员变量末尾不要加"_"
+Do not add a trailing "_" to member variable names.
 
-push前先提交代码，push和提交请分别执行不要放在一起
+Commit code before pushing; run commit and push as separate steps, not together.
 
-有新版本tag的时候别忘记更新CMakeLists.txt里的版本号
+When there is a new version tag, don't forget to update the version number in CMakeLists.txt.

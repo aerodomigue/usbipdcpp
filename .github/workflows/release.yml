@@ -1,6 +1,6 @@
-# 发布预编译二进制到 GitHub Release
-# 触发：推送 v* 标签（如 v1.0.4）
-# 产出：linux-x64 / linux-aarch64 / macos-arm64 / win-x64 动态库 tar.gz 包
+# Publish prebuilt binaries to GitHub Release
+# Trigger: push a v* tag (e.g. v1.0.4)
+# Output: linux-x64 / linux-aarch64 / macos-arm64 / win-x64 shared library tar.gz packages
 
 name: Release
 
@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ======== 依赖 ========
+      # ======== Dependencies ========
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
@@ -67,7 +67,7 @@ jobs:
         run: |
           vcpkg install asio spdlog libusb cxxopts pkgconf gtest --triplet x64-windows
 
-      # ======== CMake 配置 ========
+      # ======== CMake configuration ========
 
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
@@ -126,7 +126,7 @@ jobs:
             -DUSBIPDCPP_BUILD_TESTS=ON `
             -S ${{ github.workspace }}
 
-      # ======== 编译 + 测试 + 安装 ========
+      # ======== Build + Test + Install ========
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -142,12 +142,12 @@ jobs:
           VERSION="${VERSION#v}"
           DIRNAME="usbipdcpp-${VERSION}-${{ matrix.name }}"
           cmake --install build --config Release --prefix "${DIRNAME}"
-          # 复制 BtbN ffmpeg DLL 到安装目录（Windows）
+          # Copy BtbN ffmpeg DLLs to the install directory (Windows)
           [ -n "$FFMPEG_DIR" ] && cp "$FFMPEG_DIR"/bin/*.dll "${DIRNAME}/bin/"
           tar czf "${DIRNAME}.tar.gz" "${DIRNAME}"
           echo "archive=${DIRNAME}.tar.gz" >> $GITHUB_ENV
 
-      # ======== 上传到 Release ========
+      # ======== Upload to Release ========
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2

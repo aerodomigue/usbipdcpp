@@ -17,9 +17,9 @@ void MockCdcAcmCommunicationInterfaceHandler::on_set_line_coding(const LineCodin
 void MockCdcAcmCommunicationInterfaceHandler::on_set_control_line_state(const ControlSignalState &state) {
     SPDLOG_INFO("Control line state: DTR={}, RTS={}", state.dtr, state.rts);
 
-    // 当 DTR 变为高时，发送 DCD 和 DSR 信号
+    // When DTR goes high, send DCD and DSR signals
     if (state.dtr && get_data_handler()) {
-        // 发送状态通知：DCD 和 DSR 有效
+        // Send status notification: DCD and DSR asserted
         send_serial_state_notification(static_cast<std::uint16_t>(CdcAcmSerialState::DCD) |
                                        static_cast<std::uint16_t>(CdcAcmSerialState::DSR));
     }
@@ -47,7 +47,7 @@ void MockCdcAcmDataInterfaceHandler::on_data_received(data_type &&data) {
         return;
     }
 
-    // 回显：将接收到的数据原样发回，使用阻塞发送确保不丢数据
+    // Echo: send received data back as-is using blocking send to ensure no data is lost
     SPDLOG_DEBUG("Echo {} bytes", data.size());
     send_data_blocking(std::move(data));
 }

@@ -17,34 +17,34 @@ public:
         string_configuration_value = string_pool.new_string(L"Default Configuration");
         string_manufacturer_value = string_pool.new_string(L"Usbipdcpp");
         string_product_value = string_pool.new_string(L"Usbipdcpp Virtual Device");
-        string_serial_value = 0; // 无序列号，匹配物理 UVC 设备行为
+        string_serial_value = 0; // No serial number, matching physical UVC device behavior
     }
 
     void receive_urb(UsbIpCommand::UsbIpCmdSubmit cmd, UsbEndpoint ep, std::optional<UsbInterface> interface,
                      usbipdcpp::error_code &ec) override;
     /**
-     * @brief 新的客户端连接时会调这个函数
+     * @brief Called when a new client connects
      * @param current_session
-     * @param ec 发生的ec
+     * @param ec Error code that occurred
      */
     void on_new_connection(Session &current_session, error_code &ec) override;
     /**
-     * @brief 当发生错误、客户端detach、主动关闭服务器等情况需要完全终止传输时会调用这个函数。被调用后不可以再提交消息
+     * @brief Called when a transfer must be completely terminated due to errors, client detach, server shutdown, etc. No messages may be submitted after this call
      */
     void on_disconnection(error_code &ec) override;
 
     void handle_unlink_seqnum(std::uint32_t unlink_seqnum, std::uint32_t cmd_seqnum) override;
 
     /**
-     * @brief 设置所有接口 handler 的 device_handler 指针
-     * @note 应在创建完 UsbDevice 并设置好所有接口 handler 之后调用
+     * @brief Set the device_handler pointer for all interface handlers
+     * @note Should be called after creating UsbDevice and setting up all interface handlers
      */
     void setup_interface_handlers();
 
 protected:
     void change_device_ep0_max_size_by_speed();
 
-    // 由 receive_urb 调用，分发给具体的 handle_xxx_transfer
+    // Called by receive_urb, dispatches to specific handle_xxx_transfer
     void dispatch_urb(const UsbIpCommand::UsbIpCmdSubmit &cmd, std::uint32_t seqnum, const UsbEndpoint &ep,
                       std::optional<UsbInterface> &interface, std::uint32_t transfer_flags,
                       std::uint32_t transfer_buffer_length, const SetupPacket &setup_packet, usbipdcpp::error_code &ec);
@@ -112,7 +112,7 @@ protected:
     virtual data_type get_custom_descriptor(std::uint8_t type, std::uint8_t language_id,
                                             std::uint16_t descriptor_length, std::uint32_t *p_status);
 
-    /// 处理特殊字符串索引（如 Microsoft OS 0xEE）。返回 nullopt 表示继续走 string_pool 查找
+    /// Handles special string indices (e.g. Microsoft OS 0xEE). Returns nullopt to continue with string_pool lookup
     virtual std::optional<data_type> get_special_string_descriptor(std::uint8_t string_index);
 
     virtual void set_descriptor(std::uint16_t configuration_value) = 0;

@@ -11,20 +11,20 @@
 namespace usbipdcpp {
 
 /**
- * @brief 原始磁盘镜像文件后端（内存映射实现，跨平台）
+ * @brief Raw disk image file backend (memory-mapped implementation, cross-platform)
  *
- * 将整个镜像文件通过 mmap / MapViewOfFile 映射到进程地址空间，
- * 读写在映射内存上直接 memcpy，由 OS 负责异步写回磁盘。
+ * Maps the entire image file into the process address space via mmap / MapViewOfFile;
+ * reads and writes are done via direct memcpy on the mapped memory, with the OS handling asynchronous write-back to disk.
  *
- * 文件不存在时自动创建并填零到 initial_blocks 大小。
- * 文件已存在时根据实际大小估算块数（文件大小 / 512）。
+ * If the file does not exist, it is automatically created and zero-filled to initial_blocks size.
+ * If the file already exists, the block count is estimated from the actual file size (file size / 512).
  */
 class USBIPDCPP_API RawImageBackend : public StorageBackend {
 public:
     /**
-     * @param path           镜像文件路径
-     * @param initial_blocks 新建文件时的块数，打开已有文件时忽略
-     * @param block_size     每块字节数（默认 512）
+     * @param path           Image file path
+     * @param initial_blocks Number of blocks when creating a new file; ignored when opening an existing file
+     * @param block_size     Bytes per block (default 512)
      */
     explicit RawImageBackend(std::string path, std::uint64_t initial_blocks = 2048, std::uint32_t block_size = 512);
     ~RawImageBackend() override;
@@ -55,21 +55,21 @@ public:
     }
 
 private:
-    std::string path_; // 文件路径
-    std::uint64_t block_count_; // 总块数
-    std::uint32_t block_size_ = 512; // 每块字节数
-    void *mapped_data_ = nullptr; // 映射后的内存首地址
-    std::size_t mapped_size_ = 0; // 映射的总字节数
-    mutable std::mutex mutex_; // 保护并发读写
+    std::string path_; // File path
+    std::uint64_t block_count_; // Total block count
+    std::uint32_t block_size_ = 512; // Bytes per block
+    void *mapped_data_ = nullptr; // Base address of the mapped memory
+    std::size_t mapped_size_ = 0; // Total size of the mapping in bytes
+    mutable std::mutex mutex_; // Protects concurrent reads and writes
 
 #ifdef _WIN32
-    void *file_handle_ = nullptr; // CreateFile 返回的 HANDLE
-    void *mapping_handle_ = nullptr; // CreateFileMapping 返回的 HANDLE
+    void *file_handle_ = nullptr; // HANDLE returned by CreateFile
+    void *mapping_handle_ = nullptr; // HANDLE returned by CreateFileMapping
 #else
-    int fd_ = -1; // open 返回的文件描述符
-    int fs_block_size_ = 4096; // 文件系统块大小，punch_hole 对齐用
+    int fd_ = -1; // File descriptor returned by open
+    int fs_block_size_ = 4096; // Filesystem block size, used for punch_hole alignment
 #ifdef __linux__
-    int splice_pipe_[2] = {-1, -1}; // splice 用管道
+    int splice_pipe_[2] = {-1, -1}; // Pipe used for splice
 #endif
 #endif
 };

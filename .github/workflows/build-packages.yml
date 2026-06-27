@@ -1,5 +1,5 @@
-# 手动打包 CI — 不创建 Release，产物作为 workflow artifact 下载
-# 与 release.yml 相同的构建配置，但无需 tag，版本号从 CMakeLists.txt 提取
+# Manual packaging CI — does not create a Release; artifacts are downloaded as workflow artifacts
+# Same build configuration as release.yml, but no tag required; version number extracted from CMakeLists.txt
 
 name: Build packages (manual)
 
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ======== 依赖 ========
+      # ======== Dependencies ========
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
@@ -61,7 +61,7 @@ jobs:
         run: |
           vcpkg install asio spdlog libusb cxxopts pkgconf gtest --triplet x64-windows
 
-      # ======== CMake 配置 ========
+      # ======== CMake configuration ========
 
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
@@ -118,7 +118,7 @@ jobs:
             -DUSBIPDCPP_BUILD_TESTS=ON `
             -S ${{ github.workspace }}
 
-      # ======== 编译 + 安装到临时目录 ========
+      # ======== Build + Install to temporary directory ========
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -133,11 +133,11 @@ jobs:
           SHORT_SHA=$(git rev-parse --short HEAD)
           DIRNAME="usbipdcpp-${SHORT_SHA}-${{ matrix.name }}"
           cmake --install build --config Release --prefix "out/${DIRNAME}"
-          # 复制 BtbN ffmpeg DLL 到安装目录（Windows）
+          # Copy BtbN ffmpeg DLLs to the install directory (Windows)
           [ -n "$FFMPEG_DIR" ] && cp "$FFMPEG_DIR"/bin/*.dll "out/${DIRNAME}/bin/"
           echo "dirname=${DIRNAME}" >> $GITHUB_ENV
 
-      # ======== 上传为 workflow artifact ========
+      # ======== Upload as workflow artifact ========
 
       - uses: actions/upload-artifact@v4
         with:

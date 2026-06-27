@@ -20,36 +20,36 @@ namespace usbipdcpp {
 class Session;
 
 /**
- * @brief 线程用途标识，用于线程创建前回调
+ * @brief Thread purpose identifier, used in the pre-thread-creation callback.
  */
 enum class ThreadPurpose {
-    NetworkIO,      // Server的网络IO线程
-    SessionMain,    // Session主线程
-    SessionSender   // Session发送线程
+    NetworkIO,      // Server network I/O thread
+    SessionMain,    // Session main thread
+    SessionSender   // Session sender thread
 };
 
 /**
- * @brief 服务器网络配置
+ * @brief Server network configuration.
  */
 struct ServerNetworkConfig {
-    /// socket 接收缓冲区大小（字节），0 表示使用系统默认值
+    /// Socket receive buffer size in bytes; 0 means use the system default.
     std::size_t socket_recv_buffer_size = 128 * 1024;
-    /// socket 发送缓冲区大小（字节），0 表示使用系统默认值
+    /// Socket send buffer size in bytes; 0 means use the system default.
     std::size_t socket_send_buffer_size = 128 * 1024;
-    /// 是否禁用 Nagle 算法（减少小包延迟）
+    /// Whether to disable the Nagle algorithm (reduces small-packet latency).
     bool tcp_no_delay = true;
 };
 
 /**
- * @brief USB/IP 服务器
+ * @brief USB/IP server.
  *
- * @attention 线程安全摘要：
- *   - 构造 / start / stop / ~Server：生命周期方法，必须在同一线程串行调用
- *   - add_device / has_bound_device / get_session_count / print_bound_devices / register_session_exit_callback：
- *     内部加锁，任意线程安全
- *   - get_available_devices / get_using_devices：不锁，调用方必须自行持有 get_devices_mutex()
- *   - get_devices_mutex：始终安全，仅返回 mutex 引用
- *   - set_before_thread_create_callback / set_after_thread_create_callback：必须在 start() 之前调用
+ * @attention Thread-safety summary:
+ *   - Constructor / start / stop / ~Server: lifecycle methods; must be called serially on the same thread.
+ *   - add_device / has_bound_device / get_session_count / print_bound_devices / register_session_exit_callback:
+ *     internally locked; safe from any thread.
+ *   - get_available_devices / get_using_devices: not locked; caller must hold get_devices_mutex().
+ *   - get_devices_mutex: always safe; only returns a mutex reference.
+ *   - set_before_thread_create_callback / set_after_thread_create_callback: must be called before start().
  */
 class USBIPDCPP_API Server final {
 public:
@@ -61,105 +61,105 @@ public:
     Server(const Server &) = delete;
     Server(Server &&) = delete;
     /**
-     * @brief 不阻塞地启动一个服务器，内部启动了一个获取socket的线程。
-     * 在start前后调用add_device都可以。
-     * @param ep 监听地址
+     * @brief Start the server non-blockingly; internally starts a thread to accept sockets.
+     * add_device may be called before or after start.
+     * @param ep Listening endpoint.
      *
-     * @thread_safety 不可并发调用。至多调用一次（重复调用需先 stop()）。
+     * @thread_safety Must not be called concurrently. Call at most once (call stop() before calling again).
      */
     void start(asio::ip::tcp::endpoint &ep);
     /**
-     * @brief 内部先关闭每一个session的socket，再关闭io_context。
-     * 效果相当于每个客户端都调用了detach
+     * @brief Internally closes each session's socket first, then closes the io_context.
+     * The effect is equivalent to calling detach on every client.
      *
-     * @thread_safety 不可并发调用。必须在 start() 之后、析构之前调用，至多一次。
+     * @thread_safety Must not be called concurrently. Must be called after start() and before destruction, at most once.
      */
     void stop();
 
     /**
-     * @brief 添加一个device，线程安全。不管server是否启动都可以调用
-     * @param device 待添加的设备
-     * @return 添加的设备
+     * @brief Add a device; thread-safe. May be called regardless of whether the server is started.
+     * @param device The device to add.
+     * @return The added device.
      *
-     * @thread_safety 内部加锁，任意线程安全。
+     * @thread_safety Internally locked; safe from any thread.
      */
     std::shared_ptr<UsbDevice> add_device(std::shared_ptr<UsbDevice> &&device);
 
     /**
-     * @thread_safety 内部加锁，任意线程安全。
+     * @thread_safety Internally locked; safe from any thread.
      */
     bool has_bound_device(const std::string &busid);
 
     /**
-     * @thread_safety 内部加锁，任意线程安全。
+     * @thread_safety Internally locked; safe from any thread.
      */
     size_t get_session_count();
 
     /**
-     * @thread_safety 内部加锁，任意线程安全。
+     * @thread_safety Internally locked; safe from any thread.
      */
     void print_bound_devices();
 
     /**
-     * @brief 毫无线程安全性，请自行调用get_devices_mutex来获取锁
+     * @brief Not thread-safe at all; call get_devices_mutex() yourself to acquire the lock.
      * @return
      *
-     * @thread_safety 调用方必须持有 get_devices_mutex() 的读锁或写锁。
+     * @thread_safety Caller must hold a read or write lock from get_devices_mutex().
      */
     [[nodiscard]] std::vector<std::shared_ptr<UsbDevice>> &get_available_devices() {
         return available_devices;
     }
 
     /**
-     * @brief 毫无线程安全性，请自行调用get_devices_mutex来获取锁
+     * @brief Not thread-safe at all; call get_devices_mutex() yourself to acquire the lock.
      * @return
      *
-     * @thread_safety 调用方必须持有 get_devices_mutex() 的读锁或写锁。
+     * @thread_safety Caller must hold a read or write lock from get_devices_mutex().
      */
     [[nodiscard]] std::map<std::string, std::shared_ptr<UsbDevice>> &get_using_devices() {
         return using_devices;
     }
 
     /**
-     * @brief 操作设备数据请调用这个函数获取锁后使用
+     * @brief Call this function to obtain the lock before operating on device data.
      * @return
      *
-     * @thread_safety 始终安全（仅返回引用）。
+     * @thread_safety Always safe (returns a reference only).
      */
     [[nodiscard]] std::shared_mutex &get_devices_mutex() const {
         return devices_mutex;
     }
 
     /**
-     * @thread_safety 内部加锁，任意线程安全。
+     * @thread_safety Internally locked; safe from any thread.
      */
     void register_session_exit_callback(std::function<void()> &&callback);
 
     /**
-     * @brief 设置线程创建前回调，用于嵌入式平台设置线程核心亲和性等
-     * @param callback 回调函数，接收线程用途标识
+     * @brief Set a pre-thread-creation callback, e.g., for setting thread core affinity on embedded platforms.
+     * @param callback Callback function that receives the thread purpose identifier.
      *
-     * @thread_safety 必须在 start() 之前调用。
+     * @thread_safety Must be called before start().
      */
     void set_before_thread_create_callback(std::function<void(ThreadPurpose)> &&callback) {
         before_thread_create_callback = std::move(callback);
     }
 
     /**
-     * @brief 设置线程创建后回调，用于设置线程名称等
-     * @param callback 回调函数，接收线程用途标识和线程引用
+     * @brief Set a post-thread-creation callback, e.g., for setting the thread name.
+     * @param callback Callback function that receives the thread purpose identifier and a thread reference.
      *
-     * @thread_safety 必须在 start() 之前调用。
+     * @thread_safety Must be called before start().
      */
     void set_after_thread_create_callback(std::function<void(ThreadPurpose, std::thread&)> &&callback) {
         after_thread_create_callback = std::move(callback);
     }
 
     /**
-     * @brief 移除指定的 session 并触发 on_session_exit
-     * @param session 要移除的 session 指针
+     * @brief Remove the specified session and trigger on_session_exit.
+     * @param session Pointer to the session to remove.
      *
-     * @thread_safety 内部加锁，但仅应在 Session 退出路径中调用。
+     * @thread_safety Internally locked, but should only be called on the Session exit path.
      */
     void remove_session(Session *session);
 
@@ -186,18 +186,18 @@ protected:
 
     ServerNetworkConfig network_config;
 
-    // 线程创建前回调
+    // Pre-thread-creation callback
     std::function<void(ThreadPurpose)> before_thread_create_callback;
-    // 线程创建后回调
+    // Post-thread-creation callback
     std::function<void(ThreadPurpose, std::thread&)> after_thread_create_callback;
 
     std::list<std::weak_ptr<Session>> sessions;
     mutable std::shared_mutex session_list_mutex;
     std::condition_variable_any all_sessions_closed_cv;
 
-    //网络通信请异步使用这个io_context
+    // Use this io_context asynchronously for network communication
     asio::io_context asio_io_context;
-    //所有网络通信请运行在下面这个线程，网络通信不可运行在其他线程中
+    // All network communication must run on this thread; network communication must not run on other threads
     std::thread network_io_thread;
 
 private:
@@ -206,11 +206,11 @@ private:
     std::list<std::function<void()>> session_exit_callbacks;
     mutable std::shared_mutex exit_callbacks_mutex;
 
-    //可供导入的设备
+    // Devices available for import
     std::vector<std::shared_ptr<UsbDevice>> available_devices;
-    //正在使用的设备，busid做索引只供索引使用，与usbip协议无关
+    // Devices currently in use; busid is the index key for lookup only, unrelated to the USBIP protocol
     std::map<std::string, std::shared_ptr<UsbDevice>> using_devices;
-    //锁available_devices和using_devices两个变量
+    // Guards both available_devices and using_devices
     mutable std::shared_mutex devices_mutex;
 };
 }

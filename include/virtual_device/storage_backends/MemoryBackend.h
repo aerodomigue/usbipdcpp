@@ -9,8 +9,8 @@
 
 namespace usbipdcpp {
 
-/** 纯内存块存储后端，不落盘，无平台依赖。主要用于测试或临时数据。
- *  get_direct_buffer 返回内部缓冲区指针，READ/WRITE 零拷贝均可用。 */
+/** Pure in-memory block storage backend, no disk I/O, no platform dependencies. Mainly for testing or temporary data.
+ *  get_direct_buffer returns a pointer to the internal buffer; zero-copy READ/WRITE is available. */
 class USBIPDCPP_API MemoryBackend : public StorageBackend {
 public:
     explicit MemoryBackend(std::uint64_t blocks, std::uint32_t block_size = 512) :

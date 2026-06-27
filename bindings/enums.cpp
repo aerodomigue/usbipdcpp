@@ -4,7 +4,7 @@
 namespace py = pybind11;
 
 void bind_enums(py::module_ &m) {
-    // UsbSpeed 枚举
+    // UsbSpeed enum
     py::enum_<usbipdcpp::UsbSpeed>(m, "UsbSpeed")
         .value("Unknown", usbipdcpp::UsbSpeed::Unknown)
         .value("Low", usbipdcpp::UsbSpeed::Low)
@@ -15,7 +15,7 @@ void bind_enums(py::module_ &m) {
         .value("SuperPlus", usbipdcpp::UsbSpeed::SuperPlus)
         .export_values();
 
-    // ClassCode 枚举
+    // ClassCode enum
     py::enum_<usbipdcpp::ClassCode>(m, "ClassCode")
         .value("SeeInterface", usbipdcpp::ClassCode::SeeInterface)
         .value("Audio", usbipdcpp::ClassCode::Audio)
@@ -41,13 +41,13 @@ void bind_enums(py::module_ &m) {
         .value("VendorSpecific", usbipdcpp::ClassCode::VendorSpecific)
         .export_values();
 
-    // Direction 枚举
+    // Direction enum
     py::enum_<usbipdcpp::Direction>(m, "Direction")
         .value("In", usbipdcpp::Direction::In)
         .value("Out", usbipdcpp::Direction::Out)
         .export_values();
 
-    // EndpointAttributes 枚举
+    // EndpointAttributes enum
     py::enum_<usbipdcpp::EndpointAttributes>(m, "EndpointAttributes")
         .value("Control", usbipdcpp::EndpointAttributes::Control)
         .value("Isochronous", usbipdcpp::EndpointAttributes::Isochronous)

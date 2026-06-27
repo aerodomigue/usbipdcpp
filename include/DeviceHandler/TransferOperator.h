@@ -12,10 +12,10 @@
 namespace usbipdcpp {
 
 /**
- * @brief 传输操作器抽象基类
+ * @brief Abstract base class for transfer operators
  *
- * 封装 transfer_handle 的创建、读写、释放，供 AbstDeviceHandler 委托。
- * 不同场景各自实现：GenericTransferOperator（默认）、libusb、零拷贝存储等。
+ * Encapsulates the creation, reading/writing, and releasing of transfer_handles, delegated by AbstDeviceHandler.
+ * Different scenarios have their own implementations: GenericTransferOperator (default), libusb, zero-copy storage, etc.
  */
 class USBIPDCPP_API TransferOperator {
 public:
@@ -31,58 +31,58 @@ public:
     virtual void set_iso_descriptor(void *handle, int index, const UsbIpIsoPacketDescriptor &desc) = 0;
 
     /**
-     * @brief 发送传输数据（IN 方向：server → client）
+     * @brief Send transfer data (IN direction: server → client)
      *
-     * 由 RET_SUBMIT::to_socket() 在写完 USBIP header 后调用。
-     * 调用者保证 handle 是本 operator 的 alloc_transfer_handle 创建的。
+     * Called by RET_SUBMIT::to_socket() after writing the USBIP header.
+     * The caller guarantees that handle was created by this operator's alloc_transfer_handle.
      *
-     * 实现必须严格按以下步骤操作，不得额外读写 sock，防止协议错位：
+     * Implementations must strictly follow these steps and must not read or write sock beyond them, to prevent protocol desynchronization:
      *
-     * 1. 若 length > 0，从私有 transfer 中发送 length 字节数据到 sock。
-     *    IN 传输 length 为 actual_length，OUT 传输恒为 0，跳过此步。
+     * 1. If length > 0, send length bytes of data from the private transfer to sock.
+     *    For IN transfers, length is actual_length; for OUT transfers, length is always 0 — skip this step.
      *
-     * 2. 发送 N = alloc_transfer_handle 时传入的 num_iso_packets 个
-     *    UsbIpIsoPacketDescriptor。在 for 循环中对每个描述符调用 to_bytes()
-     *    得到网络字节序后写入 sock。
-     *    非等时传输 N 为 0 或 0xFFFFFFFF，跳过此步。
+     * 2. Send N = num_iso_packets (passed to alloc_transfer_handle)
+     *    UsbIpIsoPacketDescriptors. For each descriptor in a for loop, call to_bytes()
+     *    to obtain network byte order and write to sock.
+     *    For non-isochronous transfers, N is 0 or 0xFFFFFFFF — skip this step.
      *
-     * 所有 iso 数据包在线上紧凑排列，不得在描述符描述的字节区间之间插入空隙。
+     * All ISO packets are packed contiguously on the wire; no gaps may be inserted between the byte ranges described by descriptors.
      *
-     * 具体实现参考 GenericTransferOperator 和 LibusbTransferOperator。
+     * See GenericTransferOperator and LibusbTransferOperator for concrete implementations.
      */
     virtual void send_transfer_data(void *handle, asio::ip::tcp::socket &sock, std::size_t length,
                                     std::error_code &ec) = 0;
 
     /**
-     * @brief 接收传输数据（OUT 方向：client → server，含 IN 等时描述符）
+     * @brief Receive transfer data (OUT direction: client → server, including IN isochronous descriptors)
      *
-     * 由 CMD_SUBMIT::from_socket() 在读完 USBIP header 后调用。
-     * 调用者保证 handle 是本 operator 的 alloc_transfer_handle 创建的。
+     * Called by CMD_SUBMIT::from_socket() after reading the USBIP header.
+     * The caller guarantees that handle was created by this operator's alloc_transfer_handle.
      *
-     * 实现必须严格按以下步骤操作，不得额外读写 sock，防止协议错位：
+     * Implementations must strictly follow these steps and must not read or write sock beyond them, to prevent protocol desynchronization:
      *
-     * 1. 若 length > 0，从 sock 读出 length 字节数据写入私有 transfer。
-     *    OUT 传输 length 为 transfer_buffer_length，IN 传输恒为 0，跳过此步。
+     * 1. If length > 0, read length bytes from sock and write them into the private transfer.
+     *    For OUT transfers, length is transfer_buffer_length; for IN transfers, length is always 0 — skip this step.
      *
-     * 2. 继续从 sock 读出 N = alloc_transfer_handle 时传入的 num_iso_packets 个
-     *    UsbIpIsoPacketDescriptor。在 for 循环中使用
-     *    UsbIpIsoPacketDescriptor::from_socket(sock) 读取，
-     *    并通过 set_iso_descriptor 写入私有 transfer 对应的 iso 包描述部分。
-     *    非等时传输 N 为 0 或 0xFFFFFFFF，跳过此步。
+     * 2. Continue reading N = num_iso_packets (passed to alloc_transfer_handle)
+     *    UsbIpIsoPacketDescriptors from sock. In a for loop, use
+     *    UsbIpIsoPacketDescriptor::from_socket(sock) to read each one,
+     *    and write it into the iso packet descriptor section of the private transfer via set_iso_descriptor.
+     *    For non-isochronous transfers, N is 0 or 0xFFFFFFFF — skip this step.
      *
-     * 所有 iso 数据包在线上紧凑排列，不得在描述符描述的字节区间之间插入空隙。
+     * All ISO packets are packed contiguously on the wire; no gaps may be inserted between the byte ranges described by descriptors.
      *
-     * 具体实现参考 GenericTransferOperator 和 LibusbTransferOperator。
+     * See GenericTransferOperator and LibusbTransferOperator for concrete implementations.
      */
     virtual void recv_transfer_data(void *handle, asio::ip::tcp::socket &sock, std::size_t length,
                                     std::error_code &ec) = 0;
 
     /**
-     * @brief 返回指定端点的 leaf TransferOperator
+     * @brief Returns the leaf TransferOperator for the specified endpoint
      *
-     * 用于 from_socket 中的端点路由：路由层 op（如 VirtualDeviceTransferOperator）通过此方法
-     * 按 ep 返回最终的 leaf op，然后 caller 直接在 leaf op 上 alloc / I/O，不再需要 map 查找。
-     * 非路由层的 op 直接返回 this。
+     * Used for endpoint routing in from_socket: a routing-layer op (e.g. VirtualDeviceTransferOperator) uses this method
+     * to return the final leaf op for a given ep; the caller then performs alloc / I/O directly on the leaf op without any map lookup.
+     * Non-routing-layer ops simply return this.
      */
     virtual TransferOperator *get_operator_for_ep(std::uint8_t ep) {
         return this;
@@ -90,10 +90,10 @@ public:
 };
 
 /**
- * @brief 基于 GenericTransfer 的默认传输操作器
+ * @brief Default transfer operator based on GenericTransfer
  *
- * 与 AbstDeviceHandler 原有默认实现完全一致：创建 GenericTransfer，
- * 数据存储在 vector 中，send/recv 使用 asio 一次性读写。
+ * Fully consistent with AbstDeviceHandler's original default implementation: creates a GenericTransfer,
+ * stores data in a vector, and uses asio for one-shot reads/writes in send/recv.
  */
 class USBIPDCPP_API GenericTransferOperator : public TransferOperator {
 public:

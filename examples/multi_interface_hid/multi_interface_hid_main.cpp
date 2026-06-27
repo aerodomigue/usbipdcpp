@@ -20,8 +20,8 @@ int main(int argc, char **argv) {
 
     StringPool string_pool;
 
-    // 接口 0: 相对鼠标
-    // 接口 1: 键盘
+    // Interface 0: relative mouse
+    // Interface 1: keyboard
     std::vector<UsbInterface> interfaces = {
             UsbInterface{.interface_class = static_cast<std::uint8_t>(ClassCode::HID),
                          .interface_subclass = 0x01, // Boot Interface
@@ -79,11 +79,11 @@ int main(int argc, char **argv) {
 
     std::atomic<bool> running{true};
 
-    // 鼠标线程：画正方形（右 → 下 → 左 → 上）
+    // Mouse thread: draw a square (right -> down -> left -> up)
     std::thread mouse_thread([&]() {
         constexpr std::int8_t speed = 5;
-        constexpr int side_steps = 40; // 每边 40 步
-        int dir = 0; // 0=右, 1=下, 2=左, 3=上
+        constexpr int side_steps = 40; // 40 steps per side
+        int dir = 0; // 0=right, 1=down, 2=left, 3=up
         int step = 0;
         while (running) {
             switch (dir) {
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
         }
     });
 
-    // 键盘线程：a → z 每秒一个
+    // Keyboard thread: a -> z, one key per second
     std::thread keyboard_thread([&]() {
         constexpr std::uint8_t HID_A = 0x04;
         while (running) {

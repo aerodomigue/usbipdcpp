@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     SPDLOG_INFO("Connect with: usbip attach -r <host> -b {}", busid);
     SPDLOG_INFO("Press Enter to exit...");
 
-    // 每隔一秒按下/释放 A 键
+    // Press/release the A key every second
     std::atomic<bool> running{true};
     std::thread key_thread([&]() {
         while (running) {

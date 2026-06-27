@@ -160,24 +160,24 @@ namespace UvcFourCC {
     constexpr std::uint32_t I420 = 0x30323449; // 'I420' LE
 } // namespace UvcFourCC
 
-/// UVC 格式类别 — 决定 VS 描述符子类型和 PROBE/COMMIT 字段行为
+/// UVC format category — determines VS descriptor subtype and PROBE/COMMIT field behavior
 enum class UvcFormatCategory : std::uint8_t {
     Uncompressed, // YUY2 / NV12 / I420 — VS_DESC_FORMAT_UNCOMPRESSED
     Mjpeg,       // MJPEG — VS_DESC_FORMAT_MJPEG
-    FrameBased,  // 通用 Frame-Based (VP8 等) — VS_DESC_FORMAT_FRAME_BASED
-    H264,        // H.264 — VS_DESC_FORMAT_H264（UVC 1.5 H.264 Payload spec）
+    FrameBased,  // Generic Frame-Based (VP8, etc.) — VS_DESC_FORMAT_FRAME_BASED
+    H264,        // H.264 — VS_DESC_FORMAT_H264 (UVC 1.5 H.264 Payload spec)
 };
 
 inline constexpr UvcFormatCategory uvc_format_category(std::uint32_t fourcc) {
     switch (fourcc) {
     case UvcFourCC::MJPEG: return UvcFormatCategory::Mjpeg;
     case UvcFourCC::H264:  return UvcFormatCategory::H264;
-    // YUY2 / NV12 / I420 及其他未知均视为不压缩
+    // YUY2 / NV12 / I420 and other unknowns are treated as uncompressed
     default:               return UvcFormatCategory::Uncompressed;
     }
 }
 
-/// UVC 使用的 16 字节 GUID（USB 描述符中的小端序）
+/// 16-byte GUID used by UVC (little-endian in USB descriptors)
 struct UvcGuid {
     std::uint8_t data[16];
 

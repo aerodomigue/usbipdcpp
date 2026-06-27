@@ -10,7 +10,7 @@
 
 namespace py = pybind11;
 
-// Trampoline 类：允许 Python 继承 C++ 虚类
+// Trampoline class: allows Python to inherit C++ virtual classes
 class PyVirtualInterfaceHandler : public usbipdcpp::VirtualInterfaceHandler {
 public:
     using usbipdcpp::VirtualInterfaceHandler::VirtualInterfaceHandler;
@@ -121,7 +121,7 @@ public:
 };
 
 void bind_virtual_device(py::module_ &m) {
-    // VirtualInterfaceHandler - 支持继承
+    // VirtualInterfaceHandler - supports inheritance
     py::class_<usbipdcpp::VirtualInterfaceHandler, PyVirtualInterfaceHandler,
                std::shared_ptr<usbipdcpp::VirtualInterfaceHandler>>(m, "VirtualInterfaceHandler")
         .def(py::init<usbipdcpp::UsbInterface &, usbipdcpp::StringPool &>(),
@@ -131,14 +131,14 @@ void bind_virtual_device(py::module_ &m) {
             self.VirtualInterfaceHandler::on_new_connection(session, ec);
         })
         .def("on_disconnection", [](usbipdcpp::VirtualInterfaceHandler &self) {
-            // 实际清理由 trampoline 在 Python 回调后自动执行
+            // Actual cleanup is performed automatically by the trampoline after the Python callback
         })
         .def("get_string_interface_value", &usbipdcpp::VirtualInterfaceHandler::get_string_interface_value)
         .def("get_string_interface", &usbipdcpp::VirtualInterfaceHandler::get_string_interface)
         .def("change_string_interface", &usbipdcpp::VirtualInterfaceHandler::change_string_interface,
              py::arg("new_str"));
 
-    // HidVirtualInterfaceHandler - 支持继承
+    // HidVirtualInterfaceHandler - supports inheritance
     py::class_<usbipdcpp::HidVirtualInterfaceHandler, PyHidVirtualInterfaceHandler,
                std::shared_ptr<usbipdcpp::HidVirtualInterfaceHandler>>(m, "HidVirtualInterfaceHandler",
                                                                        py::base<usbipdcpp::VirtualInterfaceHandler>())
@@ -151,11 +151,11 @@ void bind_virtual_device(py::module_ &m) {
             self.send_input_report(asio::buffer(str.data(), str.size()));
         });
 
-    // AbstDeviceHandler - 基类（不直接构造，仅供继承链注册）
+    // AbstDeviceHandler - base class (not directly constructed, only registered for the inheritance chain)
     py::class_<usbipdcpp::AbstDeviceHandler, std::shared_ptr<usbipdcpp::AbstDeviceHandler>>(
         m, "AbstDeviceHandler");
 
-    // SimpleVirtualDeviceHandler - 设备级 Handler
+    // SimpleVirtualDeviceHandler - device-level handler
     py::class_<usbipdcpp::SimpleVirtualDeviceHandler, usbipdcpp::AbstDeviceHandler,
                std::shared_ptr<usbipdcpp::SimpleVirtualDeviceHandler>>(
         m, "SimpleVirtualDeviceHandler")

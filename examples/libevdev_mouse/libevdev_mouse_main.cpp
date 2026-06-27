@@ -31,20 +31,20 @@ int main(int argc, char **argv) {
     auto port = result["port"].as<std::uint16_t>();
     auto busid = result["busid"].as<std::string>();
 
-    // 设置信号处理
+    // Set up signal handlers
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
     auto mouses = findAllMouses();
 
     if (mouses.size() > 0) {
-        std::cout << std::format("当前系统有{}个可用的鼠标设备", mouses.size()) << std::endl;
+        std::cout << std::format("There are {} available mouse devices on the system", mouses.size()) << std::endl;
         for (std::size_t i = 0; i < mouses.size(); i++) {
-            std::cout << std::format("第{}个鼠标设备：{}", i, mouses[i].name) << std::endl;
-            std::cout << std::format("路径：{}", mouses[i].path.string()) << std::endl;
+            std::cout << std::format("Mouse device #{}: {}", i, mouses[i].name) << std::endl;
+            std::cout << std::format("Path: {}", mouses[i].path.string()) << std::endl;
             std::cout << std::endl;
         }
-        std::cout << std::format("请输入想使用的鼠标设备编号：");
+        std::cout << std::format("Please enter the number of the mouse device to use: ");
 
         std::size_t index;
         while (std::cin >> index) {
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
             }
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cout << std::format("编号不合法，请重新输入") << std::endl;
+            std::cout << std::format("Invalid number, please try again") << std::endl;
         }
         MouseDevice opened_mouse;
 
@@ -122,13 +122,13 @@ int main(int argc, char **argv) {
         std::cout << "Reading mouse events. Press Ctrl+C to exit..." << std::endl;
         std::cout << "-------- Start of Event Group --------" << std::endl;
 
-        // 使用 poll 监控文件描述符
+        // Use poll to monitor file descriptors
         struct pollfd fds[1];
         fds[0].fd = opened_mouse.fd;
         fds[0].events = POLLIN;
 
         while (!should_exit) {
-            // 等待事件（1000毫秒超时）
+            // Wait for events (1000ms timeout)
             int ret = poll(fds, 1, 1000);
 
             if (ret < 0) {
@@ -137,19 +137,19 @@ int main(int argc, char **argv) {
             }
 
             if (ret == 0) {
-                // 超时 - 无事件
+                // Timeout - no events
                 continue;
             }
 
 
-            // 读取所有可用事件
+            // Read all available events
             while ((rc = libevdev_next_event(opened_mouse.dev, LIBEVDEV_READ_FLAG_NORMAL, &ev)) == 0) {
-                // std::cout<<"尝试获取锁"<<std::endl;
+                // std::cout<<"Trying to acquire lock"<<std::endl;
                 std::lock_guard lock(mouse_interface_handler.state_mutex);
-                // std::cout<<"获取锁"<<std::endl;
+                // std::cout<<"Lock acquired"<<std::endl;
                 switch (ev.type) {
                     case EV_REL:
-                        // 鼠标移动事件
+                        // Mouse movement event
                         switch (ev.code) {
                             case REL_X: {
                                 mouse_interface_handler.current_state.move_horizontal = std::clamp(
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
                         break;
 
                     case EV_KEY:
-                        // 鼠标按键事件
+                        // Mouse button event
                         switch (ev.code) {
                             case BTN_LEFT:
                                 mouse_interface_handler.current_state.left_pressed = ev.value;
@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
                         break;
 
                     case EV_SYN:
-                        // 同步事件 - 表示一组事件结束
+                        // Sync event - marks the end of an event group
                         if (ev.code == SYN_REPORT) {
                             std::cout << "-------- End of Event Group --------" << std::endl;
                         }
@@ -248,16 +248,16 @@ int main(int argc, char **argv) {
             }
         }
 
-        SPDLOG_INFO("正在退出...");
+        SPDLOG_INFO("Exiting...");
 
         closeMouse(opened_mouse);
 
         server.stop();
 
-        SPDLOG_INFO("已退出");
+        SPDLOG_INFO("Exited");
     }
     else {
-        std::cout << "！无可使用的鼠标设备" << std::endl;
+        std::cout << "! No usable mouse device found" << std::endl;
     }
 
 

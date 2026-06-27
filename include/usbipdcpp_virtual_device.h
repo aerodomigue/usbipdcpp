@@ -2,7 +2,7 @@
 
 #include "usbipdcpp_core.h"
 
-// 虚拟设备基类
+// Virtual device base classes
 #include "virtual_device/VirtualDeviceHandler.h"
 #include "virtual_device/SimpleVirtualDeviceHandler.h"
 #include "virtual_device/VirtualInterfaceHandler.h"

@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
     spdlog::set_level(spdlog::level::trace);
 
     int err;
-    // 启用 libusb 调试日志
+    // Enable libusb debug logging
     // libusb_set_option(nullptr, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_DEBUG);
     err = libusb_init(nullptr);
     if (err) {
@@ -30,16 +30,16 @@ int main(int argc, char **argv) {
     asio::ip::tcp::endpoint endpoint(asio::ip::tcp::v4(), port);
     libusb_server.start(endpoint);
 
-    // SPDLOG_DEBUG("直接绑定3-5-1");
+    // SPDLOG_DEBUG("Directly bind 3-5-1");
     // server.bind_host_device(server.find_by_busid("3-5-1"));
     // auto target_busid = "1-1";
-    // SPDLOG_DEBUG("直接绑定1-1");
+    // SPDLOG_DEBUG("Directly bind 1-1");
     // auto found = LibusbServer::find_by_busid("1-1");
     // if (found) {
     //     server.bind_host_device(found);
     // }
     // else {
-    //     SPDLOG_ERROR("不存在设备{}", target_busid);
+    //     SPDLOG_ERROR("Device {} does not exist", target_busid);
     // }
 
 
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
                 if (device) {
                     libusb_server.unbind_host_device(device);
                 }
-                //主机上找不到，这个设备，如果还处于绑定状态但找不到则需要清除这个设备
+                // Cannot find this device on the host; if it is still in a bound state but not found, remove it
                 else if (libusb_server.get_server().has_bound_device(target_busid)) {
                     spdlog::warn("Can't find target busid {} in server, but it has been bound."
                                  "Has it been removed?", target_busid);

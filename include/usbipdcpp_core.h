@@ -1,6 +1,6 @@
 #pragma once
 
-// 核心类型
+// Core types
 #include "type.h"
 #include "constant.h"
 #include "SetupPacket.h"
@@ -8,9 +8,9 @@
 #include "Interface.h"
 #include "Device.h"
 
-// 核心功能
+// Core functionality
 #include "Server.h"
 #include "Session.h"
 
-// 工具
+// Utilities
 #include "utils/StringPool.h"

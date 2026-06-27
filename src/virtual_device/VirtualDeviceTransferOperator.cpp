@@ -20,9 +20,9 @@ void *VirtualDeviceTransferOperator::alloc_transfer_handle(std::size_t buffer_le
 }
 
 void VirtualDeviceTransferOperator::free_transfer_handle(void *handle) {
-    // leaf op 已存入 TransferHandle，正常路径不会走到这里。
-    // 如果走了，说明 caller 没有正确使用 TransferHandle::get_operator()。
-    SPDLOG_ERROR("VDTO::free_transfer_handle handle={:p} 不应被调用", static_cast<const void *>(handle));
+    // The leaf op is stored in TransferHandle; this should not be reached on the normal path.
+    // If reached, the caller did not use TransferHandle::get_operator() correctly.
+    SPDLOG_ERROR("VDTO::free_transfer_handle handle={:p} should not be called", static_cast<const void *>(handle));
 }
 
 std::size_t VirtualDeviceTransferOperator::get_actual_length(void *handle) {

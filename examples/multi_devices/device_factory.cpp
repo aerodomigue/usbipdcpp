@@ -9,7 +9,7 @@
 
 std::shared_ptr<usbipdcpp::UsbDevice> DeviceFactory::create_simple_device(int index,
                                                                           usbipdcpp::StringPool &string_pool) {
-    // 创建接口端点
+    // Create interface endpoints
     std::vector<usbipdcpp::UsbInterface> interfaces = {
             usbipdcpp::UsbInterface{.interface_class = static_cast<std::uint8_t>(usbipdcpp::ClassCode::HID),
                                     .interface_subclass = 0x00,
@@ -19,10 +19,10 @@ std::shared_ptr<usbipdcpp::UsbDevice> DeviceFactory::create_simple_device(int in
                                                                           .max_packet_size = 8,
                                                                           .interval = 10}}}}};
 
-    // 为接口设置处理器
+    // Set handler for the interface
     interfaces[0].with_handler<SimpleHidInterfaceHandler>(string_pool);
 
-    // 创建设备
+    // Create device
     auto device = std::make_shared<usbipdcpp::UsbDevice>(usbipdcpp::UsbDevice{
             .path = generate_path(index),
             .busid = generate_busid(index),
@@ -42,7 +42,7 @@ std::shared_ptr<usbipdcpp::UsbDevice> DeviceFactory::create_simple_device(int in
             .ep0_out = usbipdcpp::UsbEndpoint::get_ep0_out(usbipdcpp::UsbSpeed::Full),
     });
 
-    // 为设备设置处理器
+    // Set handler for the device
     auto device_handler = device->with_handler<SimpleDeviceHandler>(string_pool);
     device_handler->setup_interface_handlers();
 
@@ -74,11 +74,11 @@ std::string DeviceFactory::generate_path(int index) {
 }
 
 std::uint16_t DeviceFactory::generate_vendor_id(int index) {
-    // 使用基础VID + index，保证每个设备有不同的VID
+    // Use base VID + index to ensure each device has a different VID
     return static_cast<std::uint16_t>(0x1234 + index - 1);
 }
 
 std::uint16_t DeviceFactory::generate_product_id(int index) {
-    // 使用基础PID + index，保证每个设备有不同的PID
+    // Use base PID + index to ensure each device has a different PID
     return static_cast<std::uint16_t>(0x5678 + index - 1);
 }

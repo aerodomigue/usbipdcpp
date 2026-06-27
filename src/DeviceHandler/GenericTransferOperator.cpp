@@ -5,7 +5,7 @@
 
 using namespace usbipdcpp;
 
-// ========== GenericTransferOperator 实现 ==========
+// ========== GenericTransferOperator implementation ==========
 
 void *GenericTransferOperator::alloc_transfer_handle(std::size_t buffer_length, int num_iso_packets,
                                                      const UsbIpHeaderBasic &header, const SetupPacket &setup_packet) {
@@ -45,7 +45,7 @@ void GenericTransferOperator::send_transfer_data(void *handle, asio::ip::tcp::so
         for (auto &iso: trx->iso_descriptors) {
             if (need_to_send_buffer)
                 buffers.push_back(asio::buffer(trx->data.data() + iso.offset, iso.actual_length));
-            // 描述符原样透传，offset/length 保持调用者设置的 buffer 布局值
+            // Pass through the descriptor as-is; offset/length keep the buffer layout set by the caller
             desc_bytes.push_back(iso.to_bytes());
         }
         for (auto &bytes: desc_bytes) {

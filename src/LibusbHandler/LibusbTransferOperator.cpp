@@ -45,8 +45,9 @@ void *LibusbTransferOperator::alloc_transfer_handle(std::size_t buffer_length, i
         if (!trx) [[unlikely]] {
             return nullptr;
         }
-        // libusb_alloc_transfer 不会设置公开的 num_iso_packets 字段（文档 io.c L443 明确说明），
-        // 必须用户自行赋值，否则 recv_transfer_data 中描述符读取循环读到垃圾值导致协议错位。
+        // libusb_alloc_transfer does not set the public num_iso_packets field (documented in io.c L443),
+        // so it must be set manually; otherwise the descriptor read loop in recv_transfer_data reads garbage
+        // values and causes protocol misalignment.
         trx->num_iso_packets = num_iso_packets;
     }
 
@@ -88,7 +89,7 @@ std::size_t LibusbTransferOperator::get_actual_length(void *handle) {
 UsbIpIsoPacketDescriptor LibusbTransferOperator::get_iso_descriptor(void *handle, int index) {
     auto *trx = static_cast<libusb_transfer *>(handle);
     auto &iso = trx->iso_packet_desc[index];
-    // libusb 的 iso 包在 buffer 中连续存放，offset = 前面所有包的 length 累加
+    // libusb iso packets are stored contiguously in the buffer; offset = sum of lengths of all preceding packets
     unsigned offset = 0;
     for (int i = 0; i < index; i++) {
         offset += trx->iso_packet_desc[i].length;
@@ -115,9 +116,10 @@ void LibusbTransferOperator::send_transfer_data(void *handle, asio::ip::tcp::soc
     if (trx->type == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS && trx->num_iso_packets > 0) {
         SmallVector<asio::const_buffer, 130> buffers;
         SmallVector<decltype(UsbIpIsoPacketDescriptor{}.to_bytes()), 130> desc_bytes;
-        // offset: buffer 中的包槽位偏移（pkt.length 步长），同时用于数据读取和描述符 offset 字段。
-        //   槽位大小由客户端 CMD_SUBMIT 的描述符 length 决定，必须按 pkt.length 步进而非 actual_length，
-        //   否则 vhci 会把包 N 的数据错误地写入包 N-1 的槽位中。
+        // offset: packet slot offset in the buffer (stepped by pkt.length), used for both data reading and
+        //   the descriptor offset field. Slot size is determined by the descriptor length in the client's
+        //   CMD_SUBMIT; must step by pkt.length, not actual_length, otherwise vhci will incorrectly write
+        //   packet N's data into the slot of packet N-1.
         bool need_to_send_buffer = (length > 0);
         std::uint32_t offset = 0;
         for (int i = 0; i < trx->num_iso_packets; i++) {
@@ -148,11 +150,11 @@ void LibusbTransferOperator::recv_transfer_data(void *handle, asio::ip::tcp::soc
                                                 std::error_code &ec) {
     auto *trx = static_cast<libusb_transfer *>(handle);
     if (length > 0) {
-        // 控制传输 buffer 前 8 字节留给 setup 包，由后续 receive_urb 填入；
-        // 此处从偏移 8 开始读取数据阶段内容。
-        // trx->type 此时尚未设置，不能用来判断传输类型；
-        // 改用 trx->length 判断：alloc 时控制传输多加了 LIBUSB_CONTROL_SETUP_SIZE，
-        // 因此 trx->length > length 说明 buffer 包含 setup 前缀
+        // The first 8 bytes of the control transfer buffer are reserved for the setup packet, filled in
+        // by receive_urb later; read the data phase starting at offset 8.
+        // trx->type is not yet set at this point and cannot be used to determine the transfer type;
+        // use trx->length instead: at alloc time a control transfer adds LIBUSB_CONTROL_SETUP_SIZE,
+        // so trx->length > length means the buffer contains the setup prefix.
         bool is_control = (static_cast<std::size_t>(trx->length) > length);
         auto *buf = trx->buffer + (is_control ? LIBUSB_CONTROL_SETUP_SIZE : 0);
         asio::read(sock, asio::buffer(buf, length), ec);

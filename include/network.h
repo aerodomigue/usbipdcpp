@@ -62,9 +62,9 @@ template<typename T>
 concept serializable_vector = is_serializable_vector_t<T>::value;
 
 /**
- * @brief 全部用 sizeof 计算长度
- * @tparam Args 类型
- * @return 总长度
+ * @brief Calculates the total size using sizeof for all types.
+ * @tparam Args Types.
+ * @return Total size.
  */
 template<std::unsigned_integral... Args>
 constexpr std::size_t calculate_unsigned_integral_total_size() {
@@ -72,10 +72,10 @@ constexpr std::size_t calculate_unsigned_integral_total_size() {
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 array_data_type 类型。
- * 整数类型用sizeof计算，array 类型会用std::size计算
- * @tparam Args 类型
- * @return 总长度
+ * @brief Can only handle unsigned_integral types and array_data_type types.
+ * Integer types are measured with sizeof; array types are measured with std::size.
+ * @tparam Args Types.
+ * @return Total size.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || is_array_data_type<std::remove_cvref_t<Args>>) &&
@@ -94,11 +94,11 @@ constexpr std::size_t calculate_total_size_with_array() {
 }
 
 /**
- * @brief calculate_total_size_with_array 的直接传参的类型自动推导版本。
- * 只能处理 unsigned_integral 类型和 array_data_type 类型。
- * 整数类型用sizeof计算，array 类型会用std::size计算
- * @param args 参数
- * @return 长度
+ * @brief Direct-argument type-deduction version of calculate_total_size_with_array.
+ * Can only handle unsigned_integral types and array_data_type types.
+ * Integer types are measured with sizeof; array types are measured with std::size.
+ * @param args Arguments.
+ * @return Total size.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || is_array_data_type<std::remove_cvref_t<Args>>) &&
@@ -108,10 +108,10 @@ constexpr std::size_t calculate_data_total_size_with_array(const Args &...args) 
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 supported_data_type 类型，整数类型用sizeof计算，supported_data_type
- * 类型会用std::size计算
- * @param arg 参数
- * @return 长度
+ * @brief Can only handle unsigned_integral types and supported_data_type types.
+ * Integer types are measured with sizeof; supported_data_type types are measured with std::size.
+ * @param arg Arguments.
+ * @return Total size.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || supported_data_type<std::remove_cvref_t<Args>>) &&
@@ -129,9 +129,9 @@ constexpr std::size_t calculate_data_total_size_with_range(const Args &...arg) {
 }
 
 /**
- * @brief 从socket中读入整数，会一次性全读入然后赋值。读入后会调用 ntoh
- * @param sock 目标socket
- * @param args 整数
+ * @brief Read integers from a socket all at once and assign them. ntoh is called after reading.
+ * @param sock Target socket.
+ * @param args Integers to read into.
  */
 template<std::unsigned_integral... Args>
 void unsigned_integral_read_from_socket(asio::ip::tcp::socket &sock, Args &...args) {
@@ -154,12 +154,12 @@ void unsigned_integral_read_from_socket(asio::ip::tcp::socket &sock, Args &...ar
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 supported_data_type 类型。
- * 整数类型读取后调用 ntoh，supported_data_type 类型会直接读取。
- * 会挨个读取并写入
- * @tparam Args 所有类型
- * @param sock 目标socket
- * @param args 希望读入的数据
+ * @brief Can only handle unsigned_integral types and supported_data_type types.
+ * Integer types have ntoh called after reading; supported_data_type types are read directly.
+ * Reads and writes each argument one by one.
+ * @tparam Args All types.
+ * @param sock Target socket.
+ * @param args Data to read into.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || supported_data_type<std::remove_cvref_t<Args>>) &&
@@ -204,12 +204,12 @@ inline std::uint8_t read_u8(asio::ip::tcp::socket &sock) {
 }
 
 /**
- * @brief 从socket中读入整数和数组，会一次性全读入然后赋值。
- * 整数类型读取后会调用 ntoh，数组类型直接复制。
- * @tparam padding 尾部 padding 字节数
- * @tparam Args 参数类型
- * @param sock 目标socket
- * @param args 希望读入的数据（整数引用或数组引用）
+ * @brief Read integers and arrays from a socket all at once and assign them.
+ * Integer types have ntoh called after reading; array types are copied directly.
+ * @tparam padding Number of trailing padding bytes.
+ * @tparam Args Parameter types.
+ * @param sock Target socket.
+ * @param args Data to read into (integer references or array references).
  */
 template<std::size_t padding = 0, typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || is_array_data_type<std::remove_cvref_t<Args>>) &&
@@ -236,14 +236,14 @@ void unsigned_integral_and_array_read_from_socket(asio::ip::tcp::socket &sock, A
     };
 
     (process(args), ...);
-    // padding 数据已读取但被忽略
+    // padding bytes are read but ignored
 }
 
 /**
- * @brief 给数组添加padding
- * @tparam padding
- * @param array 源数组
- * @return padding后的数组
+ * @brief Add padding to an array.
+ * @tparam padding Number of padding bytes to add.
+ * @param array Source array.
+ * @return Padded array.
  */
 template<std::size_t padding, is_array_data_type Array,
          std::size_t total_size = calculate_total_size_with_array<Array>() + padding>
@@ -254,8 +254,8 @@ constexpr array_data_type<total_size> array_add_padding(const Array &array) {
 }
 
 /**
- * @brief 把可序列化对象的vector转换成序列化后的vector
- * @return 转换后的vector
+ * @brief Convert a vector of serializable objects into a serialized vector.
+ * @return The converted vector.
  */
 template<serializable_vector T>
     requires is_serializable_can_be_array<typename T::value_type>
@@ -273,20 +273,20 @@ data_type serializable_array_range_to_network_data(const T &vec) {
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 array_data_type 类型。
- * 整数类型会按网络字节序储存，array 类型会直接内存复制。整数会调用 hton
- * @tparam Args 传入数据的类型
- * @param args 要转换的数据
- * @return 创建的数组
+ * @brief Can only handle unsigned_integral types and array_data_type types.
+ * Integer types are stored in network byte order; array types are copied directly. hton is called for integers.
+ * @tparam Args Types of the input data.
+ * @param args Data to convert.
+ * @return Created array.
  */
 template<typename... Args, std::size_t total_size = calculate_total_size_with_array<Args...>()>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || is_array_data_type<std::remove_cvref_t<Args>>) &&
              ...)
 array_data_type<total_size> to_network_array(const Args &...args) {
-    // 创建缓冲区
+    // Create buffer
     array_data_type<total_size> buffer;
 
-    // 处理每个参数
+    // Process each argument
     std::size_t offset = 0;
     auto process = [&](auto &&arg) {
         using RawType = std::remove_cvref_t<decltype(arg)>;
@@ -297,36 +297,36 @@ array_data_type<total_size> to_network_array(const Args &...args) {
         }
         else {
             const RawType net_value = hton(arg);
-            // 复制数据到缓冲区
+            // Copy data into buffer
             std::memcpy(buffer.data() + offset, &net_value, sizeof(RawType));
             offset += sizeof(RawType);
         }
     };
-    // 展开所有参数
+    // Expand all arguments
     (process(args), ...);
 
     return buffer;
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 supported_data_type 类型。
- * 整数类型会按网络字节序储存，range 类型会直接内存复制。整数会调用 hton
- * @tparam Args 传入数据的类型
- * @param args 要转换的数据
- * @return 创建的数组
+ * @brief Can only handle unsigned_integral types and supported_data_type types.
+ * Integer types are stored in network byte order; range types are copied directly. hton is called for integers.
+ * @tparam Args Types of the input data.
+ * @param args Data to convert.
+ * @return Created vector.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || supported_data_type<std::remove_cvref_t<Args>>) &&
              ...)
 std::vector<std::uint8_t> to_network_data(const Args &...args) {
-    // 计算总缓冲区大小
+    // Calculate total buffer size
     std::size_t total_size = calculate_data_total_size_with_range(args...);
 
-    // 创建缓冲区
+    // Create buffer
     data_type buffer;
     buffer.resize(total_size);
 
-    // 处理每个参数
+    // Process each argument
     std::size_t offset = 0;
     auto process = [&](auto &&arg) {
         using RawType = std::remove_cvref_t<decltype(arg)>;
@@ -337,37 +337,37 @@ std::vector<std::uint8_t> to_network_data(const Args &...args) {
         }
         else {
             const RawType net_value = hton(arg);
-            // 复制数据到缓冲区
+            // Copy data into buffer
             std::memcpy(buffer.data() + offset, &net_value, sizeof(RawType));
             offset += sizeof(RawType);
         }
     };
 
-    // 展开所有参数
+    // Expand all arguments
     (process(args), ...);
 
     return buffer;
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 supported_data_type 类型。
- * 整数类型会按本地字节序储存，range 类型会直接内存复制。
+ * @brief Can only handle unsigned_integral types and supported_data_type types.
+ * Integer types are stored in host byte order; range types are copied directly.
  * @tparam Args
- * @param vec 目标vector
- * @param args 整数引用
+ * @param vec Target vector.
+ * @param args Integer references.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || supported_data_type<std::remove_cvref_t<Args>>) &&
              ...)
 void vector_mem_order_append(data_type &vec, const Args &...args) {
-    // 计算总缓冲区大小
+    // Calculate total buffer size
     std::size_t total_size = calculate_data_total_size_with_range(args...);
 
-    // 扩充缓冲区
+    // Expand the buffer
     std::size_t offset = vec.size();
     vec.resize(vec.size() + total_size);
 
-    // 处理每个参数
+    // Process each argument
     auto process = [&](auto &&arg) {
         using RawType = std::remove_cvref_t<decltype(arg)>;
         if constexpr (supported_data_type<RawType>) {
@@ -375,35 +375,35 @@ void vector_mem_order_append(data_type &vec, const Args &...args) {
             offset += std::size(arg);
         }
         else {
-            // 复制数据到缓冲区
+            // Copy data into buffer
             std::memcpy(vec.data() + offset, &arg, sizeof(RawType));
             offset += sizeof(RawType);
         }
     };
 
-    // 展开所有参数
+    // Expand all arguments
     (process(args), ...);
 }
 
 /**
- * @brief 只能处理 unsigned_integral 类型和 supported_data_type 类型。
- * 整数类型会按网络字节序储存，range 类型会直接内存复制。整数会调用 hton
+ * @brief Can only handle unsigned_integral types and supported_data_type types.
+ * Integer types are stored in network byte order; range types are copied directly. hton is called for integers.
  * @tparam Args
- * @param vec 目标vector
- * @param args 整数引用
+ * @param vec Target vector.
+ * @param args Integer references.
  */
 template<typename... Args>
     requires((std::unsigned_integral<std::remove_cvref_t<Args>> || supported_data_type<std::remove_cvref_t<Args>>) &&
              ...)
 void vector_append_to_net(data_type &vec, const Args &...args) {
-    // 计算总缓冲区大小
+    // Calculate total buffer size
     std::size_t total_size = calculate_data_total_size_with_range(args...);
 
-    // 扩充缓冲区
+    // Expand the buffer
     std::size_t offset = vec.size();
     vec.resize(vec.size() + total_size);
 
-    // 处理每个参数
+    // Process each argument
     auto process = [&](auto &&arg) {
         using RawType = std::remove_cvref_t<decltype(arg)>;
         if constexpr (supported_data_type<RawType>) {
@@ -412,13 +412,13 @@ void vector_append_to_net(data_type &vec, const Args &...args) {
         }
         else {
             const RawType net_value = hton(arg);
-            // 复制数据到缓冲区
+            // Copy data into buffer
             std::memcpy(vec.data() + offset, &net_value, sizeof(RawType));
             offset += sizeof(RawType);
         }
     };
 
-    // 展开所有参数
+    // Expand all arguments
     (process(args), ...);
 }
 

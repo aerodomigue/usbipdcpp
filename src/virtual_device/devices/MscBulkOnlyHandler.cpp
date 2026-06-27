@@ -78,27 +78,27 @@ void MscBulkOnlyHandler::handle_non_standard_request_type_control_urb(std::uint3
     session->submit_ret_submit(UsbIpResponse::UsbIpRetSubmit::create_ret_submit_epipe_without_data(seqnum, 0));
 }
 
-/** 为 OUT 传输提供目标缓冲区，由 StorageTransferOperator::alloc_transfer_handle 调用。
- *  Idle: CBW 走 fallback_data（返回 nullptr）
- *  DataOut: 写数据直入 mmap 或累积到 staging
- *  其他状态为协议异常，记录警告 */
+/** Provide the destination buffer for OUT transfers; called by StorageTransferOperator::alloc_transfer_handle.
+ *  Idle: CBW goes to fallback_data (returns nullptr)
+ *  DataOut: write data directly into mmap or accumulate to staging
+ *  Other states are protocol errors; log a warning */
 void *MscBulkOnlyHandler::prepare_out_buffer(std::size_t length, StorageIoTransfer *trx) {
     SPDLOG_DEBUG("MSC::prepare_out len={} state={}", length, static_cast<int>(state_));
     switch (state_) {
         case BotState::Idle:
             SPDLOG_DEBUG("MSC::prepare_out CBW→nullptr");
-            return nullptr; // CBW 走 fallback_data
+            return nullptr; // CBW goes to fallback_data
 
         case BotState::DataOut:
             if (write_mmap_base_) {
-                // 零拷贝 WRITE：socket 用 splice 直写入文件，仅回退时用 mmap 指针
+                // Zero-copy WRITE: socket uses splice to write directly to file; mmap pointer only used for fallback
                 trx->direct_io = true;
                 trx->file_lba = write_lba_;
                 trx->file_offset = write_accumulated_;
                 SPDLOG_DEBUG("MSC::prepare_out WRITE mmap lba={} offset={}", write_lba_, write_accumulated_);
                 return static_cast<char *>(write_mmap_base_) + write_accumulated_;
             }
-            // 非 mmap WRITE / UNMAP：socket 直读到 staging 尾部
+            // Non-mmap WRITE / UNMAP: socket reads directly to the end of staging
             {
                 auto old_size = staging_data_.size();
                 staging_data_.resize(old_size + length);
@@ -112,23 +112,24 @@ void *MscBulkOnlyHandler::prepare_out_buffer(std::size_t length, StorageIoTransf
     }
 }
 
-/** BOT 协议状态机：CBW 解析 → DataIn/DataOut → CSW。
- *  OUT 数据经 prepare_out_buffer → recv_transfer_data → on_out_data_received 进入本函数。
- *  staging_data_ 清空延迟到下一个 CBW（Idle 分支），防止上一个 IN 传输的 sender 线程还在读 */
+/** BOT protocol state machine: CBW parse → DataIn/DataOut → CSW.
+ *  OUT data enters this function via prepare_out_buffer → recv_transfer_data → on_out_data_received.
+ *  Clearing staging_data_ is deferred to the next CBW (Idle branch) to prevent the previous IN transfer's
+ *  sender thread from still reading it. */
 void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_t length) {
     SPDLOG_DEBUG("MSC::on_out_data_recv len={} state={}", length, static_cast<int>(state_));
     switch (state_) {
         case BotState::Idle: {
-            // 上一个命令的 sender 线程已全部发完（否则 host 不会发新的 CBW），安全清空旧 staging
+            // Previous command's sender thread has finished sending (otherwise host would not send a new CBW); safe to clear old staging
             staging_data_.clear();
             read_mmap_base_ = nullptr;
             read_total_size_ = 0;
             write_mmap_base_ = nullptr;
             write_accumulated_ = 0;
 
-            // CBW 在 fallback_data 中
+            // CBW is in fallback_data
             if (trx->fallback_data.size() < sizeof(CBW)) {
-                SPDLOG_ERROR("CBW 太短: {} 字节", trx->fallback_data.size());
+                SPDLOG_ERROR("CBW too short: {} bytes", trx->fallback_data.size());
                 command_failed_ = true;
                 state_ = BotState::Status;
                 return;
@@ -136,7 +137,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
             std::memcpy(&current_cbw_, trx->fallback_data.data(), sizeof(CBW));
 
             if (current_cbw_.dCBWSignature != CBW_SIGNATURE) {
-                SPDLOG_ERROR("无效 CBW 签名: 0x{:08X}", current_cbw_.dCBWSignature);
+                SPDLOG_ERROR("Invalid CBW signature: 0x{:08X}", current_cbw_.dCBWSignature);
                 command_failed_ = true;
                 state_ = BotState::Status;
                 return;
@@ -166,15 +167,15 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                     break;
                 }
                 case 0x12: {
-                    // INQUIRY (标准 or VPD)
+                    // INQUIRY (standard or VPD)
                     bool evpd = (current_cbw_.CBWCB[1] & 0x01) != 0;
                     std::uint8_t page = current_cbw_.CBWCB[2];
                     SPDLOG_DEBUG("INQUIRY evpd={} page=0x{:02X} len={}", evpd, page, transfer_len);
                     if (!evpd) {
-                        // 标准 INQUIRY：vendor(8) + product(16) + revision(4) 来自 config_
+                        // Standard INQUIRY: vendor(8) + product(16) + revision(4) from config_
                         auto pad = [](const std::string &s, std::size_t n) {
                             std::string r = s;
-                            r.resize(n, ' '); // 不足补空格，超出截断
+                            r.resize(n, ' '); // Pad with spaces if short; truncate if long
                             return r;
                         };
                         std::uint8_t inquiry[36] = {};
@@ -199,7 +200,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                         staging_data_ = std::vector<std::uint8_t>(vpd.begin(), vpd.begin() + len);
                     }
                     else if (page == 0x80) {
-                        // Unit Serial Number，来自 config_.serial
+                        // Unit Serial Number, from config_.serial
                         const auto &sn = config_.serial;
                         std::vector<std::uint8_t> vpd{0x00, 0x80, 0x00, static_cast<std::uint8_t>(sn.size())};
                         vpd.insert(vpd.end(), sn.begin(), sn.end());
@@ -208,7 +209,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                         staging_data_ = std::vector<std::uint8_t>(vpd.begin(), vpd.begin() + len);
                     }
                     else if (page == 0xB0) {
-                        // Block Limits VPD: 告之最大 UNMAP LBA 数和粒度
+                        // Block Limits VPD: advertise maximum UNMAP LBA count and granularity
                         std::vector<std::uint8_t> vpd(64, 0);
                         vpd[0] = 0x00;
                         vpd[1] = 0xB0;
@@ -228,14 +229,14 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                         staging_data_ = std::vector<std::uint8_t>(vpd.begin(), vpd.begin() + len);
                     }
                     else if (page == 0xB2) {
-                        // Logical Block Provisioning: 宣告支持 UNMAP
+                        // Logical Block Provisioning: advertise UNMAP support
                         std::vector<std::uint8_t> vpd{0x00, 0xB2, 0x00, 0x04, 0x00, 0x80, 0x02, 0x00};
                         auto len = std::min(transfer_len, std::uint32_t(vpd.size()));
                         staging_offset_ = 0;
                         staging_data_ = std::vector<std::uint8_t>(vpd.begin(), vpd.begin() + len);
                     }
                     else {
-                        // 不支持的 VPD page — 回空
+                        // Unsupported VPD page — return empty
                         staging_offset_ = 0;
                         staging_data_.clear();
                     }
@@ -259,11 +260,11 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                     break;
 
                 case 0x23: {
-                    // READ FORMAT CAPACITIES（Windows 客户端会发）
+                    // READ FORMAT CAPACITIES (sent by Windows clients)
                     auto blocks = backend_ ? backend_->block_count() : 0;
                     std::uint32_t bs = backend_ ? backend_->block_size() : 512;
                     std::uint8_t buf[12] = {};
-                    buf[3] = 8; // 一个 8 字节描述符
+                    buf[3] = 8; // One 8-byte descriptor
                     buf[4] = (blocks >> 24) & 0xFF;
                     buf[5] = (blocks >> 16) & 0xFF;
                     buf[6] = (blocks >> 8) & 0xFF;
@@ -333,14 +334,14 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                         count = 256;
 
                     if (lba + count > (backend_ ? backend_->block_count() : 0)) {
-                        SPDLOG_WARN("SCSI cmd 0x{:02X} LBA={} count={} 超出范围", cmd, lba, count);
+                        SPDLOG_WARN("SCSI cmd 0x{:02X} LBA={} count={} out of range", cmd, lba, count);
                         command_failed_ = true;
                         state_ = BotState::Status;
                         break;
                     }
 
                     if (cmd == 0x28) {
-                        // READ：优先 mmap 直发（sendfile 路径），否则回退 staging
+                        // READ: prefer mmap direct send (sendfile path); fall back to staging otherwise
                         staging_offset_ = 0;
                         read_lba_ = lba;
                         read_mmap_base_ = backend_->get_direct_buffer(lba);
@@ -360,7 +361,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                         state_ = BotState::Status;
                     }
                     else {
-                        // WRITE：优先 mmap 直写（socket 直读入 mmap），否则回退 staging
+                        // WRITE: prefer mmap direct write (socket reads directly into mmap); fall back to staging otherwise
                         write_lba_ = lba;
                         write_count_ = count;
                         write_accumulated_ = 0;
@@ -382,7 +383,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                     state_ = BotState::Status;
                     break;
                 case 0x42: {
-                    // UNMAP，数据长度以 CBW.dCBWDataTransferLength 为准（某些内核 CDB 参数长度为 0）
+                    // UNMAP: use CBW.dCBWDataTransferLength as data length (some kernel CDB parameter lengths are 0)
                     auto data_len = current_cbw_.dCBWDataTransferLength;
                     SPDLOG_DEBUG("UNMAP CBW tag=0x{:08X} dataLen={}", current_cbw_.dCBWTag, data_len);
                     if (read_only_) {
@@ -402,7 +403,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                     break;
                 }
                 default:
-                    SPDLOG_WARN("不支持的 SCSI 命令: 0x{:02X}", cmd);
+                    SPDLOG_WARN("Unsupported SCSI command: 0x{:02X}", cmd);
                     command_failed_ = true;
                     state_ = BotState::Status;
                     break;
@@ -431,7 +432,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                 }
             }
             else if (write_mmap_base_) {
-                // 零拷贝 WRITE：数据已直读入 mmap，叠加偏移
+                // Zero-copy WRITE: data already read directly into mmap; accumulate offset
                 write_accumulated_ += length;
                 if (write_accumulated_ >= static_cast<std::size_t>(write_count_) * backend_->block_size()) {
                     write_mmap_base_ = nullptr;
@@ -441,7 +442,7 @@ void MscBulkOnlyHandler::on_out_data_received(StorageIoTransfer *trx, std::size_
                 }
             }
             else {
-                // 非 mmap WRITE 回退：累积 staging 后写盘
+                // Non-mmap WRITE fallback: accumulate staging then write to disk
                 if (write_lba_ + write_count_ <= backend_->block_count()) {
                     if (staging_data_.size() >= static_cast<std::size_t>(write_count_) * backend_->block_size()) {
                         backend_->write(write_lba_, write_count_, staging_data_.data());
@@ -474,7 +475,7 @@ void MscBulkOnlyHandler::handle_bulk_transfer(std::uint32_t seqnum, const UsbEnd
                 if (len > 0) {
                     auto *trx = StorageIoTransfer::from_handle(transfer.get());
                     if (read_mmap_base_) {
-                        // 零拷贝发送：external_buf 直指 mmap，file_lba/file_offset 供 send_direct
+                        // Zero-copy send: external_buf points directly to mmap; file_lba/file_offset for send_direct
                         trx->direct_io = true;
                         trx->external_buf = static_cast<char *>(read_mmap_base_) + staging_offset_;
                         trx->file_lba = read_lba_;
@@ -497,7 +498,7 @@ void MscBulkOnlyHandler::handle_bulk_transfer(std::uint32_t seqnum, const UsbEnd
                     session->submit_ret_submit(UsbIpResponse::UsbIpRetSubmit::create_ret_submit_with_status_and_no_data(
                             seqnum, static_cast<std::uint32_t>(UrbStatusType::StatusOK), 0));
                 }
-                // 全部发完 → Status，不清 staging/mmap（sender 还在排队发送）
+                // All sent → Status; do not clear staging/mmap (sender is still queuing sends)
                 if (staging_offset_ >= total) {
                     staging_offset_ = 0;
                     data_residue_ = 0;
@@ -525,8 +526,8 @@ void MscBulkOnlyHandler::handle_bulk_transfer(std::uint32_t seqnum, const UsbEnd
                 trx->actual_length = sizeof(CSW);
                 session->submit_ret_submit(UsbIpResponse::UsbIpRetSubmit::create_ret_submit_with_status_and_no_iso(
                         seqnum, static_cast<std::uint32_t>(UrbStatusType::StatusOK), sizeof(CSW), std::move(transfer)));
-                // CSW 入队后切回 Idle，旧 staging 延迟到下一个 CBW 的 Idle 分支清空，
-                // 保证 sender 线程有足够时间消费完外部指针（avoid use-after-free）
+                // After CSW is enqueued, switch back to Idle; old staging deferred to be cleared at next CBW's Idle branch,
+                // ensuring the sender thread has enough time to finish consuming the external pointer (avoid use-after-free)
                 state_ = BotState::Idle;
                 break;
             }

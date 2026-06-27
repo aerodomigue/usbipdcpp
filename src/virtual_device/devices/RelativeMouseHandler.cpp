@@ -6,8 +6,8 @@ namespace usbipdcpp {
 
 RelativeMouseHandler::RelativeMouseHandler(UsbInterface &handle_interface, StringPool &string_pool) :
     HidVirtualInterfaceHandler(handle_interface, string_pool) {
-    // 相对坐标鼠标: 6 字节报告，5 按钮 + X/Y 16位相对移动 + 滚轮
-    // [0] 按钮 bit0-4 + 3 位填充, [1-2] X LE, [3-4] Y LE, [5] 滚轮
+    // Relative mouse: 6-byte report, 5 buttons + X/Y 16-bit relative movement + scroll wheel
+    // [0] buttons bit0-4 + 3 bits padding, [1-2] X LE, [3-4] Y LE, [5] wheel
     report_descriptor = {
             0x05,
             0x01, // Usage Page (Generic Desktop)
@@ -20,7 +20,7 @@ RelativeMouseHandler::RelativeMouseHandler(UsbInterface &handle_interface, Strin
             0xA1,
             0x00, //   Collection (Physical)
 
-            // 5 按钮 + 3 位填充
+            // 5 buttons + 3 bits padding
             0x05,
             0x09, //   Usage Page (Button)
             0x19,
@@ -45,7 +45,7 @@ RelativeMouseHandler::RelativeMouseHandler(UsbInterface &handle_interface, Strin
             0x81,
             0x03, //   Input (Const)
 
-            // X/Y 相对移动 16位 (-32767~32767)
+            // X/Y relative movement 16-bit (-32767~32767)
             0x05,
             0x01, //   Usage Page (Generic Desktop)
             0x09,
@@ -65,7 +65,7 @@ RelativeMouseHandler::RelativeMouseHandler(UsbInterface &handle_interface, Strin
             0x81,
             0x06, //   Input (Data,Var,Rel)
 
-            // 滚轮 (-127~127)
+            // Scroll wheel (-127~127)
             0x09,
             0x38, //   Usage (Wheel)
             0x15,
@@ -95,7 +95,7 @@ void RelativeMouseHandler::on_new_connection(Session &current_session, error_cod
     current = State{};
     last = State{};
 
-    // 启动发送线程，等待状态变化后发送报告
+    // Start send thread; send report when state changes
     send_thread = std::thread([this]() {
         while (!should_stop) {
             std::unique_lock lock(state_mutex);
@@ -103,7 +103,7 @@ void RelativeMouseHandler::on_new_connection(Session &current_session, error_cod
             if (should_stop)
                 break;
 
-            // 这里只当状态变化了才去发送报告符
+            // Only send report when state has changed
             if (current != last) [[likely]] {
                 send_report();
                 current.relative_data.reset();
@@ -166,8 +166,8 @@ void RelativeMouseHandler::notify() {
 
 void RelativeMouseHandler::move(std::int16_t dx, std::int16_t dy) {
     std::lock_guard lock(state_mutex);
-    // 累加钳位到 ±32767：int16 溢出会导致方向反向，
-    // 钳位到 HID 描述符 16 位 Logical Min/Max 一致，保证饱和而非回绕
+    // Accumulate and clamp to ±32767: int16 overflow would reverse direction;
+    // clamping to HID descriptor 16-bit Logical Min/Max ensures saturation, not wraparound
     int new_dx = std::clamp(static_cast<int>(current.relative_data.dx) + dx, -32767, 32767);
     int new_dy = std::clamp(static_cast<int>(current.relative_data.dy) + dy, -32767, 32767);
     current.relative_data.dx = static_cast<std::int16_t>(new_dx);
@@ -177,7 +177,7 @@ void RelativeMouseHandler::move(std::int16_t dx, std::int16_t dy) {
 
 void RelativeMouseHandler::set_wheel(std::int8_t delta) {
     std::lock_guard lock(state_mutex);
-    // 同 move，累加钳位防止 int8 溢出回绕
+    // Same as move; accumulate with clamping to prevent int8 overflow wraparound
     int new_wheel = std::clamp(static_cast<int>(current.relative_data.wheel) + delta, -127, 127);
     current.relative_data.wheel = static_cast<std::int8_t>(new_wheel);
     notify();

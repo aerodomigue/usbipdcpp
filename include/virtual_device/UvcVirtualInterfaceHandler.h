@@ -11,7 +11,7 @@
 
 namespace usbipdcpp {
 
-/// PROBE/COMMIT 协商结构体（UVC 1.5, 48 字节）
+/// PROBE/COMMIT negotiation structure (UVC 1.5, 48 bytes)
 struct UvcStreamingControl {
     std::uint16_t bmHint = 0;
     std::uint8_t bFormatIndex = 1;
@@ -45,7 +45,7 @@ struct UvcStreamingControl {
 
 class UvcVideoStreamingHandler;
 
-/// VideoControl 接口处理器 — 处理 PU 属性查询/设置 + 与 VS 接口协同
+/// VideoControl interface handler — handles PU attribute queries/settings + coordination with VS interface
 class USBIPDCPP_API UvcVideoControlHandler : public VirtualInterfaceHandler {
 public:
     explicit UvcVideoControlHandler(UsbInterface &handle_interface, StringPool &string_pool);
@@ -92,7 +92,7 @@ private:
     mutable std::mutex status_mutex_;
 };
 
-/// VideoStreaming 接口处理器 — PROBE/COMMIT + ISO 流推送
+/// VideoStreaming interface handler — PROBE/COMMIT + ISO stream push
 class USBIPDCPP_API UvcVideoStreamingHandler : public VirtualInterfaceHandler {
 public:
     UvcVideoStreamingHandler(UsbInterface &handle_interface, StringPool &string_pool,
@@ -131,7 +131,7 @@ public:
         vc_handler_ = handler;
     }
 
-    /// VC handler 通知停止流（Video Power Mode off 等场景）
+    /// VC handler notifies to stop streaming (e.g. Video Power Mode off)
     void notify_stop_streaming() {
         streaming_ = false;
     }
@@ -147,17 +147,17 @@ private:
     bool committed_ = false;
     bool streaming_ = false;
 
-    // 帧缓冲
+    // Frame buffer
     std::vector<std::uint8_t> frame_buffer_;
     std::size_t frame_offset_ = 0;
     bool current_fid_ = false;
 };
 
-/// UVC 设备辅助类 — 在 device 上注册 VC/VS 接口 handler 并设置描述符
+/// UVC device helper class — registers VC/VS interface handlers on device and sets descriptors
 class USBIPDCPP_API UvcDeviceHelper {
 public:
-    /// 向 device 注入 UVC 接口 handler。
-    /// device 必须已有两个接口（VC + VS），且第二个接口需含 ISO IN 端点
+    /// Inject UVC interface handlers into device.
+    /// device must already have two interfaces (VC + VS), and the second interface must contain an ISO IN endpoint
     static void setup(std::shared_ptr<UsbDevice> device, StringPool &string_pool, std::unique_ptr<VideoSource> source);
 };
 

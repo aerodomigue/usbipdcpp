@@ -13,31 +13,31 @@
 
 namespace usbipdcpp {
 /**
- * @brief 绝对坐标鼠标虚拟设备处理器
+ * @brief Absolute coordinate mouse virtual device handler
  *
- * 提供基于绝对坐标的鼠标操作API。使用屏幕坐标（像素）或 HID 原始坐标。
+ * Provides a mouse operation API based on absolute coordinates. Uses screen coordinates (pixels) or HID raw coordinates.
  *
- * HID 原始坐标范围：[0, 32767]
- * 屏幕坐标范围：通过 set_screen_bounds 设置
+ * HID raw coordinate range: [0, 32767]
+ * Screen coordinate range: set via set_screen_bounds
  */
 class USBIPDCPP_API AbsoluteMouseHandler : public HidVirtualInterfaceHandler {
 public:
-    /// HID 坐标最大值
+    /// HID coordinate maximum value
     static constexpr std::int16_t HID_MAX = 32767;
 
     /**
-     * @brief 构造函数
-     * @param handle_interface USB接口
-     * @param string_pool 字符串池
-     * @param screen_width 屏幕宽度（像素，默认1920）
-     * @param screen_height 屏幕高度（像素，默认1080）
+     * @brief Constructor
+     * @param handle_interface USB interface
+     * @param string_pool String pool
+     * @param screen_width Screen width in pixels (default 1920)
+     * @param screen_height Screen height in pixels (default 1080)
      */
     AbsoluteMouseHandler(UsbInterface &handle_interface, StringPool &string_pool, int screen_width = 1920,
                          int screen_height = 1080);
 
     ~AbsoluteMouseHandler() override = default;
 
-    // ========== HidVirtualInterfaceHandler 接口实现 ==========
+    // ========== HidVirtualInterfaceHandler interface implementation ==========
 
     void on_new_connection(Session &current_session, error_code &ec) override;
     void on_disconnection(error_code &ec) override;
@@ -45,21 +45,21 @@ public:
     std::uint16_t get_report_descriptor_size() override;
     data_type get_report_descriptor() override;
 
-    // ========== 屏幕配置 ==========
+    // ========== Screen configuration ==========
 
     /**
-     * @brief 设置屏幕尺寸
-     * @param width 屏幕宽度（像素）
-     * @param height 屏幕高度（像素）
+     * @brief Set the screen size
+     * @param width Screen width in pixels
+     * @param height Screen height in pixels
      */
     void set_screen_size(int width, int height);
 
     /**
-     * @brief 设置屏幕坐标范围
-     * @param x1 左上角X坐标
-     * @param y1 左上角Y坐标
-     * @param x2 右下角X坐标
-     * @param y2 右下角Y坐标
+     * @brief Set the screen coordinate bounds
+     * @param x1 Top-left X coordinate
+     * @param y1 Top-left Y coordinate
+     * @param x2 Bottom-right X coordinate
+     * @param y2 Bottom-right Y coordinate
      */
     void set_screen_bounds(int x1, int y1, int x2, int y2);
 
@@ -70,162 +70,162 @@ public:
     int get_screen_x2() const;
     int get_screen_y2() const;
 
-    // ========== 鼠标位置 API（屏幕坐标） ==========
+    // ========== Mouse position API (screen coordinates) ==========
 
     /**
-     * @brief 设置鼠标位置（屏幕坐标）
-     * @param x X坐标（像素）
-     * @param y Y坐标（像素）
+     * @brief Set the mouse position (screen coordinates)
+     * @param x X coordinate in pixels
+     * @param y Y coordinate in pixels
      */
     void set_position(int x, int y);
 
     /**
-     * @brief 平滑移动（屏幕坐标）
-     * @param from_x 起点X坐标（像素）
-     * @param from_y 起点Y坐标（像素）
-     * @param to_x 终点X坐标（像素）
-     * @param to_y 终点Y坐标（像素）
-     * @param duration_ms 移动总时间（毫秒）
-     * @param callback 可选的每帧回调（当前屏幕坐标）
+     * @brief Smooth move (screen coordinates)
+     * @param from_x Start X coordinate in pixels
+     * @param from_y Start Y coordinate in pixels
+     * @param to_x End X coordinate in pixels
+     * @param to_y End Y coordinate in pixels
+     * @param duration_ms Total movement time in milliseconds
+     * @param callback Optional per-frame callback (current screen coordinates)
      */
     void move(int from_x, int from_y, int to_x, int to_y, int duration_ms,
               std::function<void(int, int)> callback = nullptr);
 
     /**
-     * @brief 人性化移动（模拟真人鼠标移动）
-     * @param from_x 起点X坐标（像素）
-     * @param from_y 起点Y坐标（像素）
-     * @param to_x 终点X坐标（像素）
-     * @param to_y 终点Y坐标（像素）
-     * @param duration_ms 移动总时间（毫秒）
-     * @param callback 可选的每帧回调（当前屏幕坐标）
+     * @brief Humanized move (simulates human mouse movement)
+     * @param from_x Start X coordinate in pixels
+     * @param from_y Start Y coordinate in pixels
+     * @param to_x End X coordinate in pixels
+     * @param to_y End Y coordinate in pixels
+     * @param duration_ms Total movement time in milliseconds
+     * @param callback Optional per-frame callback (current screen coordinates)
      *
-     * 特点：贝塞尔曲线、随机速度、路径抖动、随机停顿
+     * Features: Bezier curve, random speed, path jitter, random pauses
      */
     void humanized_move(int from_x, int from_y, int to_x, int to_y, int duration_ms,
                         std::function<void(int, int)> callback = nullptr);
 
-    // ========== 鼠标位置 API（HID 原始坐标） ==========
+    // ========== Mouse position API (HID raw coordinates) ==========
 
     /**
-     * @brief 设置鼠标位置（HID 原始坐标）
-     * @param x HID X坐标 (0-32767)
-     * @param y HID Y坐标 (0-32767)
+     * @brief Set the mouse position (HID raw coordinates)
+     * @param x HID X coordinate (0-32767)
+     * @param y HID Y coordinate (0-32767)
      */
     void set_position_raw(std::int16_t x, std::int16_t y);
 
     /**
-     * @brief 平滑移动（HID 原始坐标）
-     * @param from_x 起点HID X坐标 (0-32767)
-     * @param from_y 起点HID Y坐标 (0-32767)
-     * @param to_x 终点HID X坐标 (0-32767)
-     * @param to_y 终点HID Y坐标 (0-32767)
-     * @param duration_ms 移动总时间（毫秒）
-     * @param callback 可选的每帧回调（当前HID坐标）
+     * @brief Smooth move (HID raw coordinates)
+     * @param from_x Start HID X coordinate (0-32767)
+     * @param from_y Start HID Y coordinate (0-32767)
+     * @param to_x End HID X coordinate (0-32767)
+     * @param to_y End HID Y coordinate (0-32767)
+     * @param duration_ms Total movement time in milliseconds
+     * @param callback Optional per-frame callback (current HID coordinates)
      */
     void move_raw(std::int16_t from_x, std::int16_t from_y, std::int16_t to_x, std::int16_t to_y, int duration_ms,
                   std::function<void(std::int16_t, std::int16_t)> callback = nullptr);
 
-    // ========== 按钮 API ==========
+    // ========== Button API ==========
 
     /**
-     * @brief 设置左键状态
-     * @param pressed true=按下, false=释放
+     * @brief Set the left button state
+     * @param pressed true = pressed, false = released
      */
     void set_left_button(bool pressed);
 
     /**
-     * @brief 设置右键状态
-     * @param pressed true=按下, false=释放
+     * @brief Set the right button state
+     * @param pressed true = pressed, false = released
      */
     void set_right_button(bool pressed);
 
     /**
-     * @brief 设置中键状态
-     * @param pressed true=按下, false=释放
+     * @brief Set the middle button state
+     * @param pressed true = pressed, false = released
      */
     void set_middle_button(bool pressed);
 
     /**
-     * @brief 设置滚轮
-     * @param delta 滚动量 (-127 到 127)
+     * @brief Set the scroll wheel
+     * @param delta Scroll amount (-127 to 127)
      */
     void set_wheel(std::int8_t delta);
 
     /**
-     * @brief 点击左键
-     * @param x 点击位置X坐标（像素）
-     * @param y 点击位置Y坐标（像素）
-     * @param delay_ms 按下和释放之间的延迟（毫秒）
+     * @brief Left-click
+     * @param x Click position X coordinate in pixels
+     * @param y Click position Y coordinate in pixels
+     * @param delay_ms Delay between press and release in milliseconds
      */
     void left_click(int x, int y, int delay_ms = 50);
 
     /**
-     * @brief 点击右键
-     * @param x 点击位置X坐标（像素）
-     * @param y 点击位置Y坐标（像素）
-     * @param delay_ms 按下和释放之间的延迟（毫秒）
+     * @brief Right-click
+     * @param x Click position X coordinate in pixels
+     * @param y Click position Y coordinate in pixels
+     * @param delay_ms Delay between press and release in milliseconds
      */
     void right_click(int x, int y, int delay_ms = 50);
 
     /**
-     * @brief 点击中键
-     * @param x 点击位置X坐标（像素）
-     * @param y 点击位置Y坐标（像素）
-     * @param delay_ms 按下和释放之间的延迟（毫秒）
+     * @brief Middle-click
+     * @param x Click position X coordinate in pixels
+     * @param y Click position Y coordinate in pixels
+     * @param delay_ms Delay between press and release in milliseconds
      */
     void middle_click(int x, int y, int delay_ms = 50);
 
     /**
-     * @brief 双击左键
-     * @param x 点击位置X坐标（像素）
-     * @param y 点击位置Y坐标（像素）
-     * @param delay_ms 两次点击之间的延迟（毫秒）
+     * @brief Double left-click
+     * @param x Click position X coordinate in pixels
+     * @param y Click position Y coordinate in pixels
+     * @param delay_ms Delay between the two clicks in milliseconds
      */
     void double_click(int x, int y, int delay_ms = 100);
 
-    // ========== 拖动 API ==========
+    // ========== Drag API ==========
 
     /**
-     * @brief 拖动（按下左键移动）
-     * @param from_x 起点X坐标（像素）
-     * @param from_y 起点Y坐标（像素）
-     * @param to_x 终点X坐标（像素）
-     * @param to_y 终点Y坐标（像素）
-     * @param duration_ms 移动总时间（毫秒）
-     * @param callback 可选的每帧回调（当前屏幕坐标）
+     * @brief Drag (move while holding left button)
+     * @param from_x Start X coordinate in pixels
+     * @param from_y Start Y coordinate in pixels
+     * @param to_x End X coordinate in pixels
+     * @param to_y End Y coordinate in pixels
+     * @param duration_ms Total movement time in milliseconds
+     * @param callback Optional per-frame callback (current screen coordinates)
      */
     void drag(int from_x, int from_y, int to_x, int to_y, int duration_ms,
               std::function<void(int, int)> callback = nullptr);
 
     /**
-     * @brief 人性化拖动（模拟真人拖动）
-     * @param from_x 起点X坐标（像素）
-     * @param from_y 起点Y坐标（像素）
-     * @param to_x 终点X坐标（像素）
-     * @param to_y 终点Y坐标（像素）
-     * @param duration_ms 移动总时间（毫秒）
-     * @param callback 可选的每帧回调（当前屏幕坐标）
+     * @brief Humanized drag (simulates human dragging)
+     * @param from_x Start X coordinate in pixels
+     * @param from_y Start Y coordinate in pixels
+     * @param to_x End X coordinate in pixels
+     * @param to_y End Y coordinate in pixels
+     * @param duration_ms Total movement time in milliseconds
+     * @param callback Optional per-frame callback (current screen coordinates)
      */
     void humanized_drag(int from_x, int from_y, int to_x, int to_y, int duration_ms,
                         std::function<void(int, int)> callback = nullptr);
 
-    // ========== 坐标转换 ==========
+    // ========== Coordinate conversion ==========
 
     /**
-     * @brief 将屏幕坐标转换为 HID 坐标
+     * @brief Convert screen coordinates to HID coordinates
      */
     std::pair<std::int16_t, std::int16_t> screen_to_hid(int screen_x, int screen_y) const;
 
     /**
-     * @brief 将 HID 坐标转换为屏幕坐标
+     * @brief Convert HID coordinates to screen coordinates
      */
     std::pair<int, int> hid_to_screen(std::int16_t hid_x, std::int16_t hid_y) const;
 
-    // ========== 状态查询 ==========
+    // ========== State query ==========
 
     /**
-     * @brief 获取当前按钮状态（不存储位置，位置由调用者跟踪）
+     * @brief Get the current button state (position is not stored; position is tracked by the caller)
      */
     struct ButtonState {
         bool left_button = false;
@@ -237,22 +237,22 @@ public:
     ButtonState get_button_state() const;
 
     /**
-     * @brief 等待客户端连接
-     * @param timeout_ms 超时时间（毫秒），负数表示无限等待
-     * @return true 如果客户端已连接，false 如果超时
+     * @brief Wait for a client to connect
+     * @param timeout_ms Timeout in milliseconds; negative means wait indefinitely
+     * @return true if a client connected, false if timed out
      */
     bool wait_for_client(int timeout_ms = -1);
 
 private:
-    int screen_x1_ = 0; ///< 屏幕左上角X坐标
-    int screen_y1_ = 0; ///< 屏幕左上角Y坐标
-    int screen_x2_ = 1920; ///< 屏幕右下角X坐标
-    int screen_y2_ = 1080; ///< 屏幕右下角Y坐标
-    int screen_width_; ///< 屏幕宽度 (x2 - x1)
-    int screen_height_; ///< 屏幕高度 (y2 - y1)
+    int screen_x1_ = 0; ///< Screen top-left X coordinate
+    int screen_y1_ = 0; ///< Screen top-left Y coordinate
+    int screen_x2_ = 1920; ///< Screen bottom-right X coordinate
+    int screen_y2_ = 1080; ///< Screen bottom-right Y coordinate
+    int screen_width_; ///< Screen width (x2 - x1)
+    int screen_height_; ///< Screen height (y2 - y1)
 
-    std::int16_t hid_x_ = 0; ///< 当前 HID X坐标
-    std::int16_t hid_y_ = 0; ///< 当前 HID Y坐标
+    std::int16_t hid_x_ = 0; ///< Current HID X coordinate
+    std::int16_t hid_y_ = 0; ///< Current HID Y coordinate
     bool left_button_ = false;
     bool right_button_ = false;
     bool middle_button_ = false;

@@ -20,9 +20,9 @@ class USBIPDCPP_API LibusbDeviceHandler : public AbstDeviceHandler {
 
 public:
     /**
-     * @brief 普通模式构造函数（延迟绑定）
+     * @brief Normal mode constructor (lazy binding)
      *
-     * 设备在客户端连接时（on_new_connection）才打开。
+     * The device is only opened when a client connects (on_new_connection).
      *
      * @param handle_device The UsbDevice this handler is attached to.
      * @param native_device The libusb device (not yet opened). The handler takes ownership of this reference.
@@ -30,10 +30,10 @@ public:
     explicit LibusbDeviceHandler(UsbDevice &handle_device, libusb_device *native_device);
 
     /**
-     * @brief Android 模式构造函数
+     * @brief Android mode constructor
      *
-     * 使用系统设备文件描述符。每次客户端连接时会调用 libusb_wrap_sys_device 包装 fd。
-     * 断连时会关闭 handle，下次连接时重新 wrap，支持重连。
+     * Uses a system device file descriptor. libusb_wrap_sys_device is called to wrap the fd on each client connection.
+     * The handle is closed on disconnection and re-wrapped on the next connection, supporting reconnection.
      *
      * @param handle_device The UsbDevice this handler is attached to.
      * @param fd A valid file descriptor opened on the device node.
@@ -64,11 +64,11 @@ public:
     int tweak_reset_device_cmd(const SetupPacket &setup_packet);
 
     /**
-     * @brief 处理特殊控制请求
+     * @brief Handle special control requests
      * @param setup_packet
-     * @return -1: 不需要 tweak，应该提交 transfer
-     *          0: tweak 成功，不需要提交 transfer
-     *         >0: tweak 失败（libusb 错误码），不需要提交 transfer
+     * @return -1: no tweak needed, should submit transfer
+     *          0: tweak succeeded, no need to submit transfer
+     *         >0: tweak failed (libusb error code), no need to submit transfer
      */
     int tweak_special_requests(const SetupPacket &setup_packet);
 
@@ -81,11 +81,11 @@ public:
 
     struct libusb_callback_args {
         LibusbDeviceHandler *handler = nullptr;
-        std::uint32_t seqnum; // CMD_SUBMIT 的 seqnum
+        std::uint32_t seqnum; // seqnum of CMD_SUBMIT
         bool is_out;
-        TransferHandle transfer; // 拥有 libusb_transfer* 的所有权
-        bool unlinking = false; // unlink 正在取消中
-        std::uint32_t unlink_cmd_seqnum = 0; // 对应的 CMD_UNLINK seqnum
+        TransferHandle transfer; // Owns the libusb_transfer*
+        bool unlinking = false; // unlink is in progress
+        std::uint32_t unlink_cmd_seqnum = 0; // seqnum of the corresponding CMD_UNLINK
 
         void reset() {
             handler = nullptr;
@@ -105,47 +105,47 @@ public:
 
     static void LIBUSB_CALL transfer_callback(libusb_transfer *trx);
 
-    // 对象池：256个，alloc 时自动调用 reset() 清理脏数据
+    // Object pool: 256 slots; reset() is called automatically on alloc to clear stale data
     using CallbackArgsPool =
             ObjectPool<libusb_callback_args, 256, true, detail::DefaultLM<libusb_callback_args>, CallbackArgsReset>;
     CallbackArgsPool callback_args_pool_;
 
-    // 用于等待所有传输完成
+    // Used to wait for all transfers to complete
     std::mutex transfer_complete_mutex_;
     std::condition_variable transfer_complete_cv_;
 
-    // 这个标记一旦为true那么就应该立即停止通信，所有用来标记通信状态的变量都无效
+    // Once this flag is true, communication should stop immediately; all variables tracking communication state become invalid
     std::atomic_bool client_disconnection = false;
     std::atomic_bool device_removed = false;
 
-    // 正在进行的传输：seqnum → callback_args*
+    // Ongoing transfers: seqnum → callback_args*
     std::shared_mutex transfers_mutex_;
     std::unordered_map<std::uint32_t, libusb_callback_args *> transfers_;
     std::atomic<std::size_t> pending_count_{0};
 
-    // 设备句柄
-    // - 普通模式：在 on_new_connection 时赋值
-    // - Android 模式：在 on_new_connection 时通过 libusb_wrap_sys_device 创建
+    // Device handle
+    // - Normal mode: assigned during on_new_connection
+    // - Android mode: created via libusb_wrap_sys_device during on_new_connection
     libusb_device_handle *native_handle = nullptr;
 
-    // 设备引用（仅普通模式使用）
-    // 通过判断 native_device_ != nullptr 来区分普通模式和 Android 模式
+    // Device reference (used only in normal mode)
+    // Distinguish normal mode from Android mode by checking native_device_ != nullptr
     libusb_device *native_device_ = nullptr;
 
-    // Android 模式：系统设备文件描述符
+    // Android mode: system device file descriptor
     intptr_t wrapped_fd_ = -1;
 
-    bool interfaces_claimed_ = false; // 接口是否已声明
+    bool interfaces_claimed_ = false; // Whether interfaces have been claimed
 
     /**
-     * @brief Open device and claim interfaces (普通模式).
+     * @brief Open device and claim interfaces (normal mode).
      * Called on client connection.
      * @return true on success, false on failure.
      */
     bool open_and_claim_device();
 
     /**
-     * @brief Wrap fd and claim interfaces (Android 模式).
+     * @brief Wrap fd and claim interfaces (Android mode).
      * Called on client connection.
      * @return true on success, false on failure.
      */
@@ -157,8 +157,8 @@ public:
      */
     void release_and_close_device();
 
-    // 不可以有timeout，因为timeout代表设备数据没准备好而不是错误，
-    // 发生timeout了那么依然会提交一个rep_submit，但设备此时没响应因此不能有提交
+    // Must not have a timeout, because a timeout means the device data is not ready (not an error),
+    // and a rep_submit would still be submitted on timeout, but since the device has not responded, a submission should not occur
     static constexpr int timeout_milliseconds = 0;
 };
 

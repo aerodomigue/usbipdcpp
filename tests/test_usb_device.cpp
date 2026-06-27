@@ -94,38 +94,38 @@ TEST(TestUsbDevice, FindEndpoint) {
                                                         .ep0_in = UsbEndpoint::get_ep0_in(UsbSpeed::Full),
                                                         .ep0_out = UsbEndpoint::get_ep0_out(UsbSpeed::Full)});
 
-    // 查找存在的端点
+    // Find an existing endpoint
     auto result = device->find_ep(0x81);
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->first.address, 0x81);
 
-    // 查找不存在的端点
+    // Find a non-existing endpoint
     auto not_found = device->find_ep(0x82);
     EXPECT_FALSE(not_found.has_value());
 }
 
-// ============== 极端情况测试 ==============
+// ============== Edge Case Tests ==============
 
 TEST(TestUsbEndpoint, AllEndpointTypes) {
-    // 控制端点
+    // Control endpoint
     UsbEndpoint ctrl{.address = 0x00, .attributes = 0x00, .max_packet_size = 64, .interval = 0};
     EXPECT_EQ(ctrl.attributes & 0x03, 0x00); // Control
 
-    // 等时端点
+    // Isochronous endpoint
     UsbEndpoint iso{.address = 0x81, .attributes = 0x01, .max_packet_size = 1024, .interval = 1};
     EXPECT_EQ(iso.attributes & 0x03, 0x01); // Isochronous
 
-    // 批量端点
+    // Bulk endpoint
     UsbEndpoint bulk{.address = 0x82, .attributes = 0x02, .max_packet_size = 512, .interval = 0};
     EXPECT_EQ(bulk.attributes & 0x03, 0x02); // Bulk
 
-    // 中断端点
+    // Interrupt endpoint
     UsbEndpoint intr{.address = 0x83, .attributes = 0x03, .max_packet_size = 64, .interval = 10};
     EXPECT_EQ(intr.attributes & 0x03, 0x03); // Interrupt
 }
 
 TEST(TestUsbEndpoint, MaxEndpointAddress) {
-    // 最大有效端点地址 (0x0F | 0x80 = 0x8F)
+    // Maximum valid endpoint address (0x0F | 0x80 = 0x8F)
     UsbEndpoint ep_in{.address = 0x8F, .attributes = 0x02, .max_packet_size = 512, .interval = 0};
     EXPECT_TRUE(ep_in.is_in());
     EXPECT_EQ(ep_in.address & 0x0F, 15);
@@ -153,10 +153,10 @@ TEST(TestUsbDevice, EmptyInterfaces) {
                                                         .ep0_in = UsbEndpoint::get_ep0_in(UsbSpeed::Full),
                                                         .ep0_out = UsbEndpoint::get_ep0_out(UsbSpeed::Full)});
 
-    // 无接口设备
+    // Device with no interfaces
     EXPECT_TRUE(device->interfaces.empty());
 
-    // 查找端点应该找不到（除了 ep0）
+    // Finding an endpoint should fail (except ep0)
     auto result = device->find_ep(0x81);
     EXPECT_FALSE(result.has_value());
 }
@@ -193,14 +193,14 @@ TEST(TestUsbDevice, MultipleInterfacesFindEndpoint) {
                                                         .ep0_in = UsbEndpoint::get_ep0_in(UsbSpeed::Full),
                                                         .ep0_out = UsbEndpoint::get_ep0_out(UsbSpeed::Full)});
 
-    // 在第一个接口找到
+    // Found in the first interface
     auto result1 = device->find_ep(0x81);
     ASSERT_TRUE(result1.has_value());
     EXPECT_EQ(result1->first.address, 0x81);
     ASSERT_TRUE(result1->second.has_value());
     EXPECT_EQ(result1->second->interface_class, static_cast<std::uint8_t>(ClassCode::HID));
 
-    // 在第二个接口找到
+    // Found in the second interface
     auto result2 = device->find_ep(0x82);
     ASSERT_TRUE(result2.has_value());
     EXPECT_EQ(result2->first.address, 0x82);

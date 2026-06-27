@@ -26,25 +26,25 @@ namespace detail {
 } // namespace detail
 
 /**
- * @brief 固定大小的对象池
+ * @brief Fixed-size object pool
  *
- * 特点：
- * - 预分配所有对象，避免运行时内存分配
- * - 可验证指针归属，防止重复 free
- * - alloc O(1)，free O(log n)
- * - 可选线程安全
- * - 支持自定义 LifeManager 和 Reset 策略
+ * Features:
+ * - Pre-allocates all objects to avoid runtime memory allocation
+ * - Can verify pointer ownership to prevent double-free
+ * - alloc O(1), free O(log n)
+ * - Optionally thread-safe
+ * - Supports custom LifeManager and Reset strategies
  *
- * @warning **Reset 在 alloc() 时调用**：对象归还后其状态不会立即清除，直到下次 alloc()
- * 时 Reset::reset() 才会被调用。如果对象持有外部资源（句柄、锁、引用计数等），
- * 调用者必须在 free() 前自行释放这些资源，否则资源生命周期会延后到下次 alloc。
- * Reset 策略仅负责重置对象值字段，不应用于资源释放。
+ * @warning **Reset is called at alloc() time**: an object's state is not cleared immediately after being returned;
+ * Reset::reset() is only called on the next alloc(). If an object holds external resources (handles, locks, reference counts, etc.),
+ * the caller must release those resources before calling free(), otherwise the resource lifetime will be deferred until the next alloc.
+ * The Reset strategy is only responsible for resetting value fields of the object, not for releasing resources.
  *
- * @tparam T 对象类型
- * @tparam PoolSize 池大小
- * @tparam ThreadSafe 是否线程安全（默认 false）
- * @tparam LifeManager 生命周期管理器，提供 create() / destroy(T*)
- * @tparam Reset 重置策略，alloc 时调 reset(T&, args...)，默认空操作
+ * @tparam T Object type
+ * @tparam PoolSize Pool size
+ * @tparam ThreadSafe Whether thread-safe (default false)
+ * @tparam LifeManager Lifecycle manager providing create() / destroy(T*)
+ * @tparam Reset Reset strategy; calls reset(T&, args...) on alloc; default is a no-op
  */
 template<typename T, size_t PoolSize, bool ThreadSafe = false, typename LifeManager = detail::DefaultLM<T>,
          typename Reset = detail::DefaultReset<T>>
@@ -53,13 +53,13 @@ class ObjectPool {
 
 public:
     ObjectPool() {
-        // 创建对象
+        // Create objects
         for (size_t i = 0; i < PoolSize; ++i) {
             pool_[i] = {LifeManager::create(), false};
         }
-        // 按指针排序，用于二分查找
+        // Sort by pointer for binary search
         std::sort(pool_, pool_ + PoolSize, [](const auto &a, const auto &b) { return a.first < b.first; });
-        // 初始化空闲索引栈
+        // Initialize the free index stack
         for (size_t i = 0; i < PoolSize; ++i) {
             free_stack_[i] = i;
         }
@@ -70,18 +70,18 @@ public:
         clear();
     }
 
-    // 禁止拷贝和移动
+    // Disallow copy and move
     ObjectPool(const ObjectPool &) = delete;
     ObjectPool &operator=(const ObjectPool &) = delete;
     ObjectPool(ObjectPool &&) = delete;
     ObjectPool &operator=(ObjectPool &&) = delete;
 
     /**
-     * @brief 分配对象
-     * @param args 传递给 Reset::reset(T&, args...) 的参数
-     * @return 对象指针，池空时返回 nullptr，调用者应回退 LifeManager::create()
+     * @brief Allocate an object
+     * @param args Arguments passed to Reset::reset(T&, args...)
+     * @return Pointer to the object; returns nullptr if the pool is empty, in which case the caller should fall back to LifeManager::create()
      *
-     * 典型用法：
+     * Typical usage:
      * @code
      * auto* p = pool.alloc();
      * if (!p) p = LifeManager::create();
@@ -99,11 +99,11 @@ public:
     }
 
     /**
-     * @brief 归还对象
-     * @param obj 对象指针
-     * @return true 成功归还，false 指针不属于本池（如 alloc 回退的 create），调用者应回退 LifeManager::destroy()
+     * @brief Return an object to the pool
+     * @param obj Object pointer
+     * @return true if successfully returned; false if the pointer does not belong to this pool (e.g. a fallback create from alloc); caller should fall back to LifeManager::destroy()
      *
-     * 典型用法：
+     * Typical usage:
      * @code
      * if (!pool.free(p)) LifeManager::destroy(p);
      * @endcode
@@ -123,7 +123,7 @@ public:
     }
 
     /**
-     * @brief 获取池中可用数量
+     * @brief Get the number of available objects in the pool
      */
     size_t available() const {
         if constexpr (ThreadSafe) {
@@ -136,14 +136,14 @@ public:
     }
 
     /**
-     * @brief 获取池总容量
+     * @brief Get the total capacity of the pool
      */
     constexpr size_t capacity() const {
         return PoolSize;
     }
 
     /**
-     * @brief 清空池（销毁所有对象）
+     * @brief Clear the pool (destroy all objects)
      */
     void clear() {
         if constexpr (ThreadSafe) {
@@ -156,7 +156,7 @@ public:
     }
 
     /**
-     * @brief 重置池（归还所有对象到池，不删除）
+     * @brief Reset the pool (return all objects to the pool without deleting them)
      */
     void reset() {
         if constexpr (ThreadSafe) {
@@ -187,17 +187,17 @@ private:
     }
 
     bool free_impl(T *obj) {
-        // 二分查找指针
+        // Binary search for the pointer
         auto it = std::lower_bound(pool_, pool_ + PoolSize, obj,
                                    [](const auto &elem, T *val) { return elem.first < val; });
         if (it == pool_ + PoolSize || it->first != obj) {
-            return false; // 不是本池的对象
+            return false; // Not an object belonging to this pool
         }
         if (!it->second) {
-            return false; // 重复 free
+            return false; // Double free
         }
         it->second = false;
-        // 计算索引并压回栈
+        // Calculate index and push back onto the stack
         size_t index = it - pool_;
         free_stack_[free_top_++] = index;
         return true;
@@ -214,11 +214,11 @@ private:
     }
 
     void reset_impl() {
-        // 归还所有对象到池，不删除
+        // Return all objects to the pool without deleting
         for (size_t i = 0; i < PoolSize; ++i) {
             pool_[i].second = false;
         }
-        // 重建空闲索引栈
+        // Rebuild the free index stack
         for (size_t i = 0; i < PoolSize; ++i) {
             free_stack_[i] = i;
         }

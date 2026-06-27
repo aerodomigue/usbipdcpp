@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
 
     // UVC 1.5 Table 3-2/3-13: VC/VS interface protocol must be PC_PROTOCOL_15
     std::vector<UsbInterface> interfaces = {
-            // Interface 0: VideoControl（含中断端点用于状态通知）
+            // Interface 0: VideoControl (with interrupt endpoint for status notifications)
             UsbInterface{
                     .interface_class = CC_VIDEO,
                     .interface_subclass = SC_VIDEOCONTROL,
@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
                             .interval = 8,
                     }}},
             },
-            // Interface 1: VideoStreaming（alt 0 空端点，alt 1 ISO IN 端点）
+            // Interface 1: VideoStreaming (alt 0 empty endpoint, alt 1 ISO IN endpoint)
             UsbInterface{
                     .interface_class = CC_VIDEO,
                     .interface_subclass = SC_VIDEOSTREAMING,
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
             .ep0_out = UsbEndpoint::get_ep0_out(UsbSpeed::High),
     });
 
-    // UvcDeviceHelper 创建 VC/VS handler 并注册 + 设置描述符
+    // UvcDeviceHelper creates VC/VS handlers, registers them, and sets up descriptors
     auto source = std::make_unique<ColorBarSource>(width, height, fps);
     UvcDeviceHelper::setup(device, string_pool, std::move(source));
 

@@ -69,7 +69,7 @@ void usbipdcpp::Server::stop() {
         }
     }
     {
-        spdlog::info("等待所有session关闭");
+        spdlog::info("Waiting for all sessions to close");
         std::unique_lock lock(session_list_mutex);
         all_sessions_closed_cv.wait(lock, [this] { return sessions.empty(); });
     }
@@ -92,7 +92,7 @@ std::shared_ptr<usbipdcpp::UsbDevice> usbipdcpp::Server::add_device(std::shared_
 
 bool usbipdcpp::Server::has_bound_device(const std::string &busid) {
     std::shared_lock lock(devices_mutex);
-    //只要存了这个设备就是有设备，不管是在可用设备还是正在使用的设备
+    // As long as this device is stored it counts, regardless of whether it's in available or in-use devices
     for (auto &device: available_devices) {
         if (device->busid == busid) {
             return true;
@@ -168,7 +168,7 @@ void usbipdcpp::Server::on_session_exit() {
 
 void usbipdcpp::Server::remove_session(Session *session) {
     std::lock_guard lock(session_list_mutex);
-    // 从 sessions 列表中移除
+    // Remove from sessions list
     for (auto it = sessions.begin(); it != sessions.end();) {
         if (auto s = it->lock()) {
             if (s.get() == session) {
@@ -180,14 +180,14 @@ void usbipdcpp::Server::remove_session(Session *session) {
             }
         }
         else {
-            // 清除已失效的 weak_ptr
+            // Clean up expired weak_ptr
             it = sessions.erase(it);
         }
     }
     if (sessions.empty()) {
         all_sessions_closed_cv.notify_one();
     }
-    // 调用回调
+    // Invoke callbacks
     for (auto &callback: session_exit_callbacks) {
         callback();
     }
@@ -198,15 +198,15 @@ asio::awaitable<void> usbipdcpp::Server::do_accept(asio::ip::tcp::acceptor &acce
     while (true) {
         spdlog::info("Waiting for a new connection...");
 
-        //先创建一个Session，同时内部创建一个自己的socket
+        // Create a Session first, which also creates its own internal socket
         auto session = std::make_shared<Session>(*this);
 
         asio::error_code ec;
-        //服务器io_context接收到socket后将其转移到session内部专有的io_context
+        // After the server io_context receives the socket, transfer it to the session's own dedicated io_context
         co_await acceptor.async_accept(session->socket, asio::redirect_error(asio::use_awaitable, ec));
 
         if (!ec) {
-            // 设置 socket 选项
+            // Set socket options
             std::error_code socket_opt_ec;
             if (network_config.socket_recv_buffer_size > 0) {
                 session->socket.set_option(
@@ -240,16 +240,16 @@ asio::awaitable<void> usbipdcpp::Server::do_accept(asio::ip::tcp::acceptor &acce
                                                     remote_endpoint.port());
             spdlog::info("A new connection from {}", remote_endpoint_name);
 
-            //函数会直接返回，但内部获取了自身的shared_ptr因此不会被析构
-            //每个session启动一个线程，防止某些必须阻塞的操作影响其他设备
+            // The function returns immediately, but it has captured its own shared_ptr internally so it won't be destroyed
+            // Each session starts its own thread to prevent blocking operations from affecting other devices
             session->run();
         }
         else if (ec == asio::error::operation_aborted) {
-            SPDLOG_ERROR("Operation aborted：{}", ec.message());
+            SPDLOG_ERROR("Operation aborted: {}", ec.message());
             break;
         }
         else {
-            SPDLOG_ERROR("Connection error：{}", ec.message());
+            SPDLOG_ERROR("Connection error: {}", ec.message());
         }
     }
 }
@@ -261,44 +261,44 @@ bool usbipdcpp::Server::is_device_using(const std::string &busid) {
 
 void usbipdcpp::Server::try_moving_device_to_available(const std::string &busid) {
     print_devices();
-    SPDLOG_DEBUG("尝试将{}转移到可用设备中", busid);
+    SPDLOG_DEBUG("Attempting to move {} to available devices", busid);
     std::lock_guard lock(devices_mutex);
-    // SPDLOG_TRACE("成功获得两个锁");
+    // SPDLOG_TRACE("Successfully acquired both locks");
 
     auto ret = using_devices.find(busid);
     if (ret != using_devices.end()) {
-        SPDLOG_INFO("成功将{}转移到可用设备中", busid);
+        SPDLOG_INFO("Successfully moved {} to available devices", busid);
         auto &dev = ret->second;
         available_devices.emplace_back(std::move(dev));
         using_devices.erase(busid);
     }
     else {
-        SPDLOG_WARN("找不到busid为{}的设备", busid);
+        SPDLOG_WARN("Cannot find device with busid {}", busid);
     }
 }
 
 std::shared_ptr<usbipdcpp::UsbDevice> usbipdcpp::Server::try_moving_device_to_using(const std::string &wanted_busid) {
     std::lock_guard lock(devices_mutex);
-    //找能用的设备
+    // Search for a usable device
     for (auto i = available_devices.begin(); i != available_devices.end(); ++i) {
-        //找到设备
+        // Device found
         if (wanted_busid == (*i)->busid) {
-            SPDLOG_INFO("将{}放入正在使用的设备中", wanted_busid);
-            //将想要的设备放入正在使用的设备
+            SPDLOG_INFO("Moving {} into the in-use devices", wanted_busid);
+            // Move the desired device into the in-use devices
             auto ret = (using_devices[wanted_busid] = std::move(*i));
-            //删掉可用设备中的这个设备
+            // Remove this device from the available devices list
             available_devices.erase(i);
             return ret;
         }
     }
-    SPDLOG_WARN("找不到busid为{}的设备", wanted_busid);
+    SPDLOG_WARN("Cannot find device with busid {}", wanted_busid);
     return nullptr;
 }
 
 void usbipdcpp::Server::print_devices() {
     std::shared_lock guard(devices_mutex);
-    spdlog::info("有{}个可用设备", available_devices.size());
-    spdlog::info("有{}个正在使用的设备，分别为", using_devices.size());
+    spdlog::info("There are {} available devices", available_devices.size());
+    spdlog::info("There are {} devices in use, listed as follows:", using_devices.size());
     for (auto &dev: using_devices) {
         spdlog::info("{}", dev.first);
     }

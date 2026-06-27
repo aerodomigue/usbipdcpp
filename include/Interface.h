@@ -16,7 +16,7 @@ struct USBIPDCPP_API UsbInterface {
 
     std::uint8_t current_altsetting = 0;
 
-    /// 所有 alternate setting 的端点列表，[altsetting] = 该 alt 的端点
+    /// Endpoint list for all alternate settings: [altsetting] = endpoints for that alternate setting.
     std::vector<std::vector<UsbEndpoint>> endpoints;
 
     [[nodiscard]] const std::vector<UsbEndpoint> &current_endpoints() const {

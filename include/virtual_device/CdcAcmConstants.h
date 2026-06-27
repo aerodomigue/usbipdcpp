@@ -3,7 +3,7 @@
 #include <cstdint>
 
 namespace usbipdcpp {
-// CDC ACM 类特定描述符子类型
+// CDC ACM class-specific descriptor subtypes
 enum class CdcAcmDescriptorSubtype {
     Header = 0x00,
     CallManagement = 0x01,
@@ -24,7 +24,7 @@ enum class CdcAcmDescriptorSubtype {
     ATMNetworking = 0x10,
 };
 
-// CDC ACM 控制请求码
+// CDC ACM control request codes
 enum class CdcAcmRequest {
     SendEncapsulatedCommand = 0x00,
     GetEncapsulatedResponse = 0x01,
@@ -37,13 +37,13 @@ enum class CdcAcmRequest {
     SendBreak = 0x23,
 };
 
-// CDC ACM 控制信号位
+// CDC ACM control signal bits
 enum class CdcAcmControlSignal : std::uint16_t {
     DTR = 0x01, // Data Terminal Ready
     RTS = 0x02, // Request To Send
 };
 
-// CDC ACM 串口状态位
+// CDC ACM serial state bits
 enum class CdcAcmSerialState : std::uint16_t {
     DCD = 0x01, // Data Carrier Detect
     DSR = 0x02, // Data Set Ready

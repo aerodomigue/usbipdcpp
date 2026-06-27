@@ -9,74 +9,74 @@
 namespace usbipdcpp {
 
 /**
- * @brief 环形缓冲区，支持延迟分配
+ * @brief Ring buffer with support for lazy allocation
  */
 class USBIPDCPP_API RingBuffer {
 public:
     explicit RingBuffer(std::size_t capacity = 64 * 1024);
 
     /**
-     * @brief 写入数据
-     * @param data 数据指针
-     * @param size 数据大小
-     * @return 实际写入的字节数
+     * @brief Write data
+     * @param data Data pointer
+     * @param size Data size
+     * @return Actual number of bytes written
      */
     std::size_t write(const std::uint8_t *data, std::size_t size);
 
     /**
-     * @brief 读取数据
-     * @param data 数据缓冲区
-     * @param max_size 最大读取字节数
-     * @return 实际读取的字节数
+     * @brief Read data
+     * @param data Data buffer
+     * @param max_size Maximum number of bytes to read
+     * @return Actual number of bytes read
      */
     std::size_t read(std::uint8_t *data, std::size_t max_size);
 
     /**
-     * @brief 查看数据（不移除）
-     * @param data 数据缓冲区
-     * @param max_size 最大查看字节数
-     * @return 实际查看的字节数
+     * @brief Peek at data (without removing)
+     * @param data Data buffer
+     * @param max_size Maximum number of bytes to peek
+     * @return Actual number of bytes peeked
      */
     std::size_t peek(std::uint8_t *data, std::size_t max_size) const;
 
     /**
-     * @brief 获取当前数据量
-     * @return 缓冲区中已使用字节数
+     * @brief Get the current amount of data
+     * @return Number of bytes currently used in the buffer
      */
     [[nodiscard]] std::size_t size() const;
 
     /**
-     * @brief 获取缓冲区容量
-     * @return 缓冲区总容量
+     * @brief Get the buffer capacity
+     * @return Total buffer capacity
      */
     [[nodiscard]] std::size_t capacity() const;
 
     /**
-     * @brief 获取缓冲区剩余空间
-     * @return 缓冲区可用字节数
+     * @brief Get the remaining buffer space
+     * @return Available bytes in the buffer
      */
     [[nodiscard]] std::size_t available() const;
 
     /**
-     * @brief 检查缓冲区是否为空
-     * @return true 表示为空
+     * @brief Check whether the buffer is empty
+     * @return true if empty
      */
     [[nodiscard]] bool empty() const;
 
     /**
-     * @brief 检查缓冲区是否已满
-     * @return true 表示已满
+     * @brief Check whether the buffer is full
+     * @return true if full
      */
     [[nodiscard]] bool full() const;
 
     /**
-     * @brief 清空缓冲区
+     * @brief Clear the buffer
      */
     void clear();
 
     /**
-     * @brief 调整缓冲区容量
-     * @param new_capacity 新容量
+     * @brief Resize the buffer capacity
+     * @param new_capacity New capacity
      */
     void resize(std::size_t new_capacity);
 

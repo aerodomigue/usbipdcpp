@@ -10,9 +10,9 @@ namespace usbipdcpp {
 
 KeyboardHandler::KeyboardHandler(UsbInterface &handle_interface, StringPool &string_pool) :
     HidVirtualInterfaceHandler(handle_interface, string_pool) {
-    // 两个独立报告，通过 Report ID 区分（兼容 Boot Protocol）
+    // Two independent reports distinguished by Report ID (Boot Protocol compatible)
     report_descriptor_ = {
-            // ===== Report ID 1: 标准键盘 =====
+            // ===== Report ID 1: Standard keyboard =====
             // Usage Page (Generic Desktop)
             0x05,
             0x01,
@@ -46,7 +46,7 @@ KeyboardHandler::KeyboardHandler(UsbInterface &handle_interface, StringPool &str
             // Report Count (8)
             0x95,
             0x08,
-            // Input (Data,Var,Abs) — 修饰键字节
+            // Input (Data,Var,Abs) — modifier key byte
             0x81,
             0x02,
             // Report Size (8)
@@ -55,7 +55,7 @@ KeyboardHandler::KeyboardHandler(UsbInterface &handle_interface, StringPool &str
             // Report Count (1)
             0x95,
             0x01,
-            // Input (Const) — 保留字节
+            // Input (Const) — reserved byte
             0x81,
             0x01,
             // Usage Page (Key Codes)
@@ -79,7 +79,7 @@ KeyboardHandler::KeyboardHandler(UsbInterface &handle_interface, StringPool &str
             // Report Count (6)
             0x95,
             0x06,
-            // Input (Data,Var,Abs) — 按键码
+            // Input (Data,Var,Abs) — key codes
             0x81,
             0x00,
             // End Collection (Keyboard)
@@ -151,18 +151,18 @@ void KeyboardHandler::on_new_connection(Session &current_session, error_code &ec
                     (current_state_.modifier != last_state_.modifier) || (current_state_.keys != last_state_.keys);
             bool consumer_set = (current_state_.consumer_usage != 0);
 
-            // Report ID 1: 标准键盘（9 字节含 Report ID）
+            // Report ID 1: standard keyboard (9 bytes including Report ID)
             if (kb_changed) {
                 std::array<std::uint8_t, 9> report{};
                 report[0] = REPORT_ID_KEYBOARD;
                 report[1] = current_state_.modifier;
-                report[2] = 0; // 保留字节
+                report[2] = 0; // Reserved byte
                 for (std::size_t i = 0; i < MAX_KEYS; ++i) {
                     report[3 + i] = current_state_.keys[i];
                 }
                 send_input_report(asio::buffer(report));
             }
-            // Report ID 2: Consumer Control（3 字节含 Report ID），单次触发后自动清零
+            // Report ID 2: Consumer Control (3 bytes including Report ID); auto-clears after single trigger
             if (consumer_set) {
                 std::array<std::uint8_t, 3> report{};
                 report[0] = REPORT_ID_CONSUMER;
@@ -200,7 +200,7 @@ data_type KeyboardHandler::request_get_report(std::uint8_t type, std::uint8_t re
     if (static_cast<HIDReportType>(type) == HIDReportType::Input) {
         std::lock_guard lock(state_mutex_);
         if (report_id == REPORT_ID_CONSUMER) {
-            // Consumer Control 报告（3 字节含 Report ID）
+            // Consumer Control report (3 bytes including Report ID)
             data_type result(3, 0);
             result[0] = REPORT_ID_CONSUMER;
             uint16_t consumer = current_state_.consumer_usage;
@@ -208,7 +208,7 @@ data_type KeyboardHandler::request_get_report(std::uint8_t type, std::uint8_t re
             result[2] = (consumer >> 8) & 0xFF;
             return result;
         }
-        // 默认返回键盘报告（9 字节含 Report ID）
+        // Returns keyboard report by default (9 bytes including Report ID)
         data_type result(9, 0);
         result[0] = REPORT_ID_KEYBOARD;
         result[1] = current_state_.modifier;
@@ -224,7 +224,7 @@ data_type KeyboardHandler::request_get_report(std::uint8_t type, std::uint8_t re
 
 void KeyboardHandler::request_set_report(std::uint8_t type, std::uint8_t report_id, std::uint16_t length,
                                          const data_type &data, std::uint32_t *p_status) {
-    // 主机发送的输出报告：LED 状态。data 可能含 Report ID 前缀
+    // Output report sent by host: LED state. data may contain a Report ID prefix
     if (static_cast<HIDReportType>(type) == HIDReportType::Output && !data.empty()) {
         led_status_ = (length > 1 && data[0] <= 0x02) ? data[1] : data[0];
         *p_status = 0;
@@ -245,19 +245,19 @@ void KeyboardHandler::request_set_idle(std::uint8_t speed, std::uint32_t *p_stat
     *p_status = 0;
 }
 
-// ========== 按键 API ==========
+// ========== Key API ==========
 
 void KeyboardHandler::press_key(std::uint8_t keycode) {
     if (keycode == 0)
         return;
 
     std::lock_guard lock(state_mutex_);
-    // 检查是否已按下
+    // Check if already pressed
     for (std::size_t i = 0; i < MAX_KEYS; ++i) {
         if (current_state_.keys[i] == keycode)
             return;
     }
-    // 插入到第一个空闲槽位
+    // Insert into first free slot
     for (std::size_t i = 0; i < MAX_KEYS; ++i) {
         if (current_state_.keys[i] == 0) {
             current_state_.keys[i] = keycode;
@@ -265,7 +265,7 @@ void KeyboardHandler::press_key(std::uint8_t keycode) {
             return;
         }
     }
-    SPDLOG_WARN("键盘按键已满（{} 键），忽略 0x{:02X}", MAX_KEYS, keycode);
+    SPDLOG_WARN("Keyboard is full ({} keys); ignoring 0x{:02X}", MAX_KEYS, keycode);
 }
 
 void KeyboardHandler::release_key(std::uint8_t keycode) {
@@ -284,7 +284,7 @@ void KeyboardHandler::release_key(std::uint8_t keycode) {
     if (!found)
         return;
 
-    // 压缩：移除空洞
+    // Compact: remove holes
     std::size_t write = 0;
     for (std::size_t read = 0; read < MAX_KEYS; ++read) {
         if (current_state_.keys[read] != 0) {
@@ -313,7 +313,7 @@ void KeyboardHandler::release_all() {
 
 void KeyboardHandler::press_keys(std::initializer_list<std::uint8_t> keycodes) {
     std::lock_guard lock(state_mutex_);
-    // 先清零
+    // Clear first
     for (std::size_t i = 0; i < MAX_KEYS; ++i) {
         current_state_.keys[i] = 0;
     }
@@ -335,7 +335,7 @@ bool KeyboardHandler::is_key_pressed(std::uint8_t keycode) const {
     return false;
 }
 
-// ========== 修饰键 API ==========
+// ========== Modifier key API ==========
 
 void KeyboardHandler::set_modifier(std::uint8_t mask) {
     std::lock_guard lock(state_mutex_);
@@ -358,7 +358,7 @@ std::uint8_t KeyboardHandler::get_modifier() const {
     return current_state_.modifier;
 }
 
-// ========== 媒体键 API ==========
+// ========== Media key API ==========
 
 void KeyboardHandler::press_media_key(std::uint16_t usage) {
     std::lock_guard lock(state_mutex_);
@@ -366,7 +366,7 @@ void KeyboardHandler::press_media_key(std::uint16_t usage) {
     state_cv_.notify_one();
 }
 
-// ========== LED 状态 ==========
+// ========== LED state ==========
 
 std::uint8_t KeyboardHandler::get_led_status() const {
     return led_status_.load();

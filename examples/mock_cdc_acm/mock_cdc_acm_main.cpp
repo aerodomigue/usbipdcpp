@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
 
     StringPool string_pool;
 
-    // CDC ACM 需要两个接口：通信接口和数据接口
+    // CDC ACM requires two interfaces: a communication interface and a data interface
     std::vector<UsbInterface> interfaces = {// Communication Interface
                                             UsbInterface{.interface_class = 0x02, // CDC Communication
                                                          .interface_subclass = 0x02, // ACM
@@ -42,11 +42,11 @@ int main(int argc, char **argv) {
                                                                                     .max_packet_size = 64,
                                                                                     .interval = 0}}}}};
 
-    // 设置接口处理器
+    // Set up interface handlers
     interfaces[0].with_handler<MockCdcAcmCommunicationInterfaceHandler>(string_pool);
     interfaces[1].with_handler<MockCdcAcmDataInterfaceHandler>(string_pool);
 
-    // 创建设备
+    // Create device
     auto mock_cdc_acm = std::make_shared<UsbDevice>(UsbDevice{
             .path = "/usbipdcpp/mock_cdc_acm",
             .busid = busid,
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     auto device_handler = mock_cdc_acm->with_handler<SimpleVirtualDeviceHandler>(string_pool);
     device_handler->setup_interface_handlers();
 
-    // 关联通信接口和数据接口处理器
+    // Link the communication interface handler and the data interface handler
     auto &comm_handler =
             *std::dynamic_pointer_cast<MockCdcAcmCommunicationInterfaceHandler>(mock_cdc_acm->interfaces[0].handler);
     auto &data_handler =

@@ -161,7 +161,7 @@ void DigitizerHandler::on_new_connection(Session &current_session, error_code &e
                 report[4] = (current_state_.y >> 8) & 0xFF;
                 report[5] = current_state_.pressure;
             }
-            // 不触摸时发送全零报告（tip=0, in_range=0）
+            // Send all-zero report when not touching (tip=0, in_range=0)
 
             send_input_report(asio::buffer(report));
             last_state_ = current_state_;

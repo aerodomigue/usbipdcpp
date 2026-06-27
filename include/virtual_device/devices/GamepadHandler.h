@@ -12,27 +12,27 @@
 namespace usbipdcpp {
 
 /**
- * @brief USB HID 游戏手柄虚拟设备处理器
+ * @brief USB HID gamepad virtual device handler
  *
- * 标准手柄布局：16 按钮 + D-pad + 4 模拟轴（X/Y/Z/Rz）。
- * 报告格式（11 字节）：
- *   [0-1]  按钮位掩码（16 位，little-endian）
- *   [2]    D-pad 方向（0-7 八方向，0x0F 回中）
- *   [3-4]  X 轴（int16 LE）
- *   [5-6]  Y 轴（int16 LE）
- *   [7-8]  Z 轴（int16 LE）
- *   [9-10] Rz 轴（int16 LE）
+ * Standard gamepad layout: 16 buttons + D-pad + 4 analog axes (X/Y/Z/Rz).
+ * Report format (11 bytes):
+ *   [0-1]  Button bitmask (16-bit, little-endian)
+ *   [2]    D-pad direction (0-7 for 8 directions, 0x0F for center)
+ *   [3-4]  X axis (int16 LE)
+ *   [5-6]  Y axis (int16 LE)
+ *   [7-8]  Z axis (int16 LE)
+ *   [9-10] Rz axis (int16 LE)
  */
 class USBIPDCPP_API GamepadHandler : public HidVirtualInterfaceHandler {
 public:
     static constexpr uint8_t NUM_BUTTONS = 16;
     static constexpr uint8_t NUM_AXES = 4;
-    static constexpr std::size_t REPORT_SIZE = 2 + 1 + NUM_AXES * 2; // 11 字节
+    static constexpr std::size_t REPORT_SIZE = 2 + 1 + NUM_AXES * 2; // 11 bytes
     static constexpr int16_t AXIS_MIN = -32768;
     static constexpr int16_t AXIS_MAX = 32767;
     static constexpr int16_t AXIS_CENTER = 0;
 
-    /// D-pad 方向
+    /// D-pad direction
     enum class HatDirection : uint8_t {
         North = 0,
         NorthEast = 1,
@@ -48,7 +48,7 @@ public:
     GamepadHandler(UsbInterface &handle_interface, StringPool &string_pool);
     ~GamepadHandler() override = default;
 
-    // ========== HidVirtualInterfaceHandler 接口实现 ==========
+    // ========== HidVirtualInterfaceHandler interface implementation ==========
 
     void on_new_connection(Session &current_session, error_code &ec) override;
     void on_disconnection(error_code &ec) override;
@@ -58,16 +58,16 @@ public:
     data_type request_get_report(std::uint8_t type, std::uint8_t report_id, std::uint16_t length,
                                  std::uint32_t *p_status) override;
 
-    // ========== 按钮 API ==========
+    // ========== Button API ==========
 
-    /// 设置按钮状态（0~15）
+    /// Set button state (0~15)
     void set_button(uint8_t index, bool pressed);
     bool get_button(uint8_t index) const;
 
-    /// 按下一组按钮，其余全部释放
+    /// Press a set of buttons, releasing all others
     void press_buttons(std::initializer_list<uint8_t> indices);
 
-    /// 释放所有按钮
+    /// Release all buttons
     void release_all_buttons();
 
     // ========== D-pad API ==========
@@ -75,13 +75,13 @@ public:
     void set_hat(HatDirection dir);
     HatDirection get_hat() const;
 
-    // ========== 模拟轴 API ==========
+    // ========== Analog axis API ==========
 
-    /// 设置轴值（0=X, 1=Y, 2=Z, 3=Rz），范围 AXIS_MIN~AXIS_MAX，中心为 0
+    /// Set axis value (0=X, 1=Y, 2=Z, 3=Rz), range AXIS_MIN~AXIS_MAX, center is 0
     void set_axis(uint8_t index, int16_t value);
     int16_t get_axis(uint8_t index) const;
 
-    /// 等待客户端连接
+    /// Wait for a client to connect
     bool wait_for_client(int timeout_ms = -1);
 
 private:

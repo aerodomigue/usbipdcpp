@@ -49,18 +49,18 @@ struct USBIPDCPP_API UsbDevice {
     UsbEndpoint ep0_out;
 
     /**
-     * @brief 设备处理器
-     * 必须在 Server::add_device 调用之前设置，推荐使用 with_handler 函数。
-     * 如果调用时 handler 为空，属于未定义行为。
+     * @brief Device handler.
+     * Must be set before calling Server::add_device; the with_handler function is recommended.
+     * If handler is null at call time, the behavior is undefined.
      */
     std::shared_ptr<AbstDeviceHandler> handler;
 
     /**
-     * @brief 创建并设置 handler
-     * 推荐使用此函数设置 handler。
-     * @tparam T handler 类型
-     * @tparam args 传递给 handler 构造函数的参数
-     * @return 创建的 handler
+     * @brief Create and set the handler.
+     * This function is the recommended way to set the handler.
+     * @tparam T Handler type.
+     * @tparam args Arguments forwarded to the handler constructor.
+     * @return The created handler.
      */
     template<typename T, typename... Args>
     std::shared_ptr<T> with_handler(Args &&... args) {
@@ -89,7 +89,7 @@ struct USBIPDCPP_API UsbDevice {
     [[nodiscard]] std::vector<std::uint8_t> to_bytes_with_interfaces() const;
     [[nodiscard]] array_data_type<bytes_without_interfaces_num> to_bytes_without_interfaces() const;
 
-    //devlist请求的时候要发送接口信息，import请求时不发送接口信息
+    // Interface info is sent for devlist requests; it is not sent for import requests
     [[nodiscard]] array_data_type<bytes_without_interfaces_num> to_bytes() const;
     void from_socket(asio::ip::tcp::socket &sock);
 

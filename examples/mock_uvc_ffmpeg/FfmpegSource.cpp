@@ -68,8 +68,8 @@ bool FfmpegSource::init() {
 
     const char *out_fmt = "YUY2 (decode)";
 
-    // passthrough 模式：MJPEG/H264 透传原始编码数据，其余解码 → YUY2
-    // 默认关闭（全部解码为 YUY2），保证兼容所有 UVC 驱动
+    // passthrough mode: MJPEG/H264 pass raw encoded data through; others decode to YUY2
+    // Disabled by default (decode everything to YUY2) to ensure compatibility with all UVC drivers
     if (passthrough_) {
         switch (par->codec_id) {
         case AV_CODEC_ID_MJPEG:
@@ -97,7 +97,7 @@ bool FfmpegSource::init() {
         }
     }
 
-    // 解码 + swscale → YUY2
+    // Decode + swscale -> YUY2
     passthrough_ = false;
     fourcc_ = UvcFourCC::YUY2;
     SPDLOG_INFO("FFmpeg: {} — input: {} ({}) {}x{} @ {:.2f}fps → output: {}",
@@ -144,7 +144,7 @@ bool FfmpegSource::init() {
 
 std::vector<VideoFormatInfo> FfmpegSource::supported_formats() const {
     if (!init_ok_) {
-        // init 失败时返回一个合法 YUY2 格式，避免描述符全是零导致驱动报错
+        // When init fails, return a valid YUY2 format to avoid an all-zero descriptor that would cause driver errors
         return {{UvcFourCC::YUY2, 320, 240, 320u * 240 * 2, 333333u, 333333u, 3333333u, 16}};
     }
     auto min_iv = frame_interval_;

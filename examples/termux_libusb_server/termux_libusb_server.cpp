@@ -51,11 +51,11 @@ int main(int argc, char **argv) {
     }
 
     LibusbServer server;
-    server.set_hotplug_enabled(false);  // Android 无 root 权限不支持热插拔
+    server.set_hotplug_enabled(false);  // Android without root does not support hotplug
     asio::ip::tcp::endpoint endpoint(asio::ip::tcp::v4(), listen_port);
 
-    // Android 模式：直接传入 fd，bind 时会临时 wrap 获取设备信息
-    // 每次客户端连接时会重新 wrap fd
+    // Android mode: fd is passed in directly; bind temporarily wraps it to retrieve device info
+    // The fd is re-wrapped on each client connection
     auto result = server.bind_host_device_with_wrapped_fd(fd);
     if (result != DeviceOperationResult::Success) {
         SPDLOG_ERROR("bind_host_device_with_wrapped_fd failed");

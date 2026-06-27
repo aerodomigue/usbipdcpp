@@ -12,18 +12,18 @@ void LibevdevMouseInterfaceHandler::on_new_connection(Session &current_session, 
 
     send_thread = std::thread([this]() {
         while (!should_immediately_stop) {
-            //等待状态变化通知
+            // Wait for state change notification
             std::unique_lock lock(state_mutex);
             std::array<std::uint8_t, 4> report;
 
             state_cv.wait(lock, [this]() {
                 return current_state != last_state || should_immediately_stop;
             });
-            // spdlog::info("收到state_cv通知");
+            // spdlog::info("Received state_cv notification");
             if (should_immediately_stop)
                 break;
 
-            // 构造报告数据（在锁内读取状态）
+            // Build report data (read state while holding the lock)
             report = {};
             if (current_state.left_pressed) {
                 report[0] |= 0b00000001;

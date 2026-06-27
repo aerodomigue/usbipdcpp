@@ -9,13 +9,13 @@
 namespace usbipdcpp {
 
 /**
- * @brief 小型向量容器，优先使用栈内存，溢出时回退到堆
+ * @brief Small vector container that prefers stack memory, falling back to the heap on overflow
  *
- * 适用于嵌入式平台，避免常见情况下的动态内存分配。
- * 当元素数量超过 N 时，自动迁移到堆存储。
+ * Suitable for embedded platforms to avoid dynamic memory allocation in common cases.
+ * Automatically migrates to heap storage when the element count exceeds N.
  *
- * @tparam T 元素类型
- * @tparam N 栈上最大元素数量
+ * @tparam T Element type
+ * @tparam N Maximum number of elements on the stack
  */
 template<typename T, std::size_t N>
 class SmallVector {
@@ -100,7 +100,7 @@ public:
         } else if (size_ < N) {
             stack_storage_[size_] = value;
         } else {
-            // 首次溢出，迁移到堆
+            // First overflow: migrate to heap
             migrate_to_heap();
             heap_storage_.push_back(value);
         }
@@ -113,7 +113,7 @@ public:
         } else if (size_ < N) {
             stack_storage_[size_] = std::move(value);
         } else {
-            // 首次溢出，迁移到堆
+            // First overflow: migrate to heap
             migrate_to_heap();
             heap_storage_.push_back(std::move(value));
         }
@@ -152,7 +152,7 @@ public:
     void resize(size_type new_size) {
         if (new_size <= N) {
             if (on_heap_) {
-                // 从堆迁移回栈
+                // Migrate back from heap to stack
                 for (size_type i = 0; i < new_size; ++i) {
                     stack_storage_[i] = std::move(heap_storage_[i]);
                 }

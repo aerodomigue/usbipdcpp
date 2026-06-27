@@ -14,10 +14,10 @@ namespace usbipdcpp {
 class VirtualDeviceHandler;
 
 /**
- * @brief 端点请求队列，按端点地址管理传输请求（纯数据容器，不加锁）
+ * @brief Endpoint request queue, manages transfer requests by endpoint address (pure data container, no locking)
  *
- * 用于管理每个端点的待处理 IN 传输请求。
- * 注意：所有方法都不加锁，调用者需自行管理互斥锁。
+ * Used to manage pending IN transfer requests for each endpoint.
+ * Note: All methods are not locked; callers must manage the mutex themselves.
  */
 class EndpointRequestQueue {
 public:
@@ -28,16 +28,16 @@ public:
     };
 
     /**
-     * @brief 向指定端点入队请求
-     * @note 调用者需已持有互斥锁
+     * @brief Enqueue a request to the specified endpoint
+     * @note Caller must already hold the mutex
      */
     void enqueue(std::uint8_t ep_address, Request request) {
         queues_[ep_address].push_back(std::move(request));
     }
 
     /**
-     * @brief 从指定端点出队请求
-     * @note 调用者需已持有互斥锁
+     * @brief Dequeue a request from the specified endpoint
+     * @note Caller must already hold the mutex
      */
     std::optional<Request> dequeue(std::uint8_t ep_address) {
         auto it = queues_.find(ep_address);
@@ -50,9 +50,9 @@ public:
     }
 
     /**
-     * @brief 从任何有请求的端点出队请求（返回端点地址和请求）
-     * @return pair<端点地址, 请求>，如果所有队列都为空返回 nullopt
-     * @note 调用者需已持有互斥锁
+     * @brief Dequeue a request from any endpoint that has one (returns endpoint address and request)
+     * @return pair<endpoint address, request>; returns nullopt if all queues are empty
+     * @note Caller must already hold the mutex
      */
     std::optional<std::pair<std::uint8_t, Request>> dequeue_any() {
         for (auto &[ep, queue]: queues_) {
@@ -66,8 +66,8 @@ public:
     }
 
     /**
-     * @brief 获取指定端点队列的首个请求（不出队）
-     * @note 调用者需已持有互斥锁
+     * @brief Peek at the first request in the specified endpoint queue (without dequeuing)
+     * @note Caller must already hold the mutex
      */
     Request *peek(std::uint8_t ep_address) {
         auto it = queues_.find(ep_address);
@@ -78,8 +78,8 @@ public:
     }
 
     /**
-     * @brief 检查指定端点队列是否为空
-     * @note 调用者需已持有互斥锁
+     * @brief Check whether the specified endpoint queue is empty
+     * @note Caller must already hold the mutex
      */
     bool empty(std::uint8_t ep_address) const {
         auto it = queues_.find(ep_address);
@@ -87,9 +87,9 @@ public:
     }
 
     /**
-     * @brief 按 seqnum 取消请求（用于 UNLINK）
-     * @return 如果找到并移除了请求返回 true
-     * @note 调用者需已持有互斥锁
+     * @brief Cancel a request by seqnum (for UNLINK)
+     * @return true if the request was found and removed
+     * @note Caller must already hold the mutex
      */
     bool cancel_by_seqnum(std::uint32_t unlink_seqnum) {
         for (auto &[ep, queue]: queues_) {
@@ -104,8 +104,8 @@ public:
     }
 
     /**
-     * @brief 清空所有队列
-     * @note 调用者需已持有互斥锁
+     * @brief Clear all queues
+     * @note Caller must already hold the mutex
      */
     void clear() {
         queues_.clear();
@@ -125,39 +125,39 @@ public:
         string_interface = string_pool.new_string(L"Usbipdcpp Virtual Interface");
     }
 
-    // ========== 连接生命周期 API ==========
+    // ========== Connection lifecycle API ==========
 
     /**
-     * @brief 设置所属的 DeviceHandler
-     * @param handler DeviceHandler 指针
+     * @brief Set the owning DeviceHandler
+     * @param handler DeviceHandler pointer
      */
     void set_device_handler(VirtualDeviceHandler *handler) {
         device_handler = handler;
     }
 
-    /** setup_interface_handlers 末尾回调，此时 device_handler 已设置，子类可在此做初始化 */
+    /** Callback at the end of setup_interface_handlers; device_handler is set at this point, subclasses can initialize here */
     virtual void on_setup_interface_handlers() {
     }
 
     /**
-     * @brief 新的客户端连接时会调这个函数
+     * @brief Called when a new client connects
      * @param current_session
-     * @param ec 发生的ec
-     * @note 子类重写时必须调用父类实现，在函数开头调用，父类会设置session指针
+     * @param ec Error code that occurred
+     * @note Subclasses overriding this must call the parent implementation at the start; the parent sets the session pointer
      */
     void on_new_connection(Session &current_session, error_code &ec) override {
         session = &current_session;
     }
 
     /**
-     * @brief 当发生错误、客户端detach、主动关闭服务器等情况需要完全终止传输时会调用这个函数。被调用后不可以再提交消息。
-     * @note 子类重写时必须调用父类实现，在函数末尾调用，父类会清理session指针
+     * @brief Called when a transfer must be completely terminated due to errors, client detach, server shutdown, etc. No messages may be submitted after this call.
+     * @note Subclasses overriding this must call the parent implementation at the end; the parent clears the session pointer
      */
     void on_disconnection(error_code &ec) override {
         session = nullptr;
     }
 
-    // ========== 内部实现（子类无需关心） ==========
+    // ========== Internal implementation (subclasses do not need to care) ==========
 
     virtual void handle_bulk_transfer(std::uint32_t seqnum, const UsbEndpoint &ep, std::uint32_t transfer_flags,
                                       std::uint32_t transfer_buffer_length, TransferHandle transfer, error_code &ec);
@@ -179,7 +179,7 @@ public:
                                                                           const SetupPacket &setup,
                                                                           TransferHandle transfer, std::error_code &ec);
 
-    // ========== 子类必须实现的虚函数 ==========
+    // ========== Virtual functions that subclasses must implement ==========
 
     virtual void request_clear_feature(std::uint16_t feature_selector, std::uint32_t *p_status) = 0;
     virtual void request_endpoint_clear_feature(std::uint16_t feature_selector, std::uint8_t ep_address,
@@ -230,7 +230,7 @@ public:
         transfer_op_ = std::move(op);
     }
 
-    // ========== 工具函数 ==========
+    // ========== Utility functions ==========
 
     [[nodiscard]] virtual std::uint8_t get_string_interface_value() const {
         return string_interface;
@@ -244,7 +244,7 @@ public:
         string_pool.change_string(string_interface, new_str);
     }
 
-    /// 使 iInterface 与另一个 handler 一致（USBCCGP 移除 IAD 后，同功能接口靠 iInterface 分组）
+    /// Synchronize iInterface with another handler (after USBCCGP removes IAD, interfaces with the same function are grouped by iInterface)
     void sync_string_interface_from(const VirtualInterfaceHandler &other) {
         string_interface = other.string_interface;
     }
@@ -259,15 +259,15 @@ protected:
     StringPool &string_pool;
 
     /**
-     * @brief 保护 endpoint_requests_ 的互斥锁
+     * @brief Mutex protecting endpoint_requests_
      */
     mutable std::mutex endpoint_requests_mutex_;
 
     /**
-     * @brief 通用端点请求队列，用于管理 IN 传输请求
+     * @brief General-purpose endpoint request queue for managing IN transfer requests
      *
-     * 子类可以直接使用此队列，不需要各自实现。
-     * 操作时需持有 endpoint_requests_mutex_。
+     * Subclasses can use this queue directly without implementing their own.
+     * Must hold endpoint_requests_mutex_ when operating.
      */
     EndpointRequestQueue endpoint_requests_;
 };

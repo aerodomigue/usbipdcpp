@@ -30,11 +30,11 @@ enum class BotState : std::uint8_t {
     Status,
 };
 
-/// Bulk-Only Transport 签名
+/// Bulk-Only Transport signatures
 inline constexpr std::uint32_t CBW_SIGNATURE = 0x43425355; // "USBC"
 inline constexpr std::uint32_t CSW_SIGNATURE = 0x53425355; // "USBS"
 
-/// SCSI 命令码
+/// SCSI command codes
 namespace ScsiCmd {
     inline constexpr std::uint8_t TestUnitReady = 0x00;
     inline constexpr std::uint8_t RequestSense = 0x03;

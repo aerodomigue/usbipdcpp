@@ -103,7 +103,7 @@ file(GLOB VIRTUAL_DEVICE_STORAGE_BACKENDS_SRC_FILES src/virtual_device/storage_b
 file(GLOB VIRTUAL_DEVICE_VIDEO_SOURCES_SRC_FILES src/virtual_device/video_sources/*.cpp)
 file(GLOB LIBUSB_SRC_FILES src/LibusbHandler/*.cpp)
 
-# 核心库（不含虚拟设备）
+# Core library (without virtual device)
 set(LIB_TYPE STATIC)
 if(USBIPDCPP_BUILD_SHARED_LIBS)
     set(LIB_TYPE SHARED)
@@ -134,7 +134,7 @@ if(USBIPDCPP_FORCE_TRACK_PACKAGE)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USBIPDCPP_FORCE_TRACK_PACKAGE)
 endif()
 
-# 虚拟设备库
+# Virtual device library
 if(USBIPDCPP_BUILD_VIRTUAL_DEVICE)
     add_library(${PROJECT_NAME}_virtual_device ${LIB_TYPE} ${VIRTUAL_DEVICE_SRC_FILES} ${VIRTUAL_DEVICE_DEVICES_SRC_FILES} ${VIRTUAL_DEVICE_STORAGE_BACKENDS_SRC_FILES} ${VIRTUAL_DEVICE_VIDEO_SOURCES_SRC_FILES})
     set_target_properties(${PROJECT_NAME}_virtual_device PROPERTIES EXPORT_NAME virtual_device)
@@ -180,7 +180,7 @@ if (IS_TOP_LEVEL)
             FILE ${PROJECT_NAME}Targets.cmake
     )
 
-    # 安装头文件
+    # Install header files
     if(USBIPDCPP_BUILD_VIRTUAL_DEVICE)
         if (USBIPDCPP_BUILD_LIBUSB_COMPONENTS)
             install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
@@ -258,8 +258,8 @@ if (IS_TOP_LEVEL)
     )
 
     if(WIN32)
-        # 安装编译输出中所有 DLL（含 vcpkg 依赖）到 bin 目录
-        # 用双引号：CMAKE_INSTALL_BINDIR 在配置期展开，CMAKE_INSTALL_PREFIX 在安装期展开
+        # Install all DLLs from the build output (including vcpkg dependencies) to the bin directory
+        # Use double quotes: CMAKE_INSTALL_BINDIR expands at configure time, CMAKE_INSTALL_PREFIX expands at install time
         install(CODE "
             file(GLOB_RECURSE dlls \"${CMAKE_BINARY_DIR}/*.dll\")
             if(dlls)

@@ -40,7 +40,7 @@ void UsbDevice::from_socket(asio::ip::tcp::socket &sock) {
 std::optional<std::pair<usbipdcpp::UsbEndpoint, std::optional<usbipdcpp::UsbInterface>>>
 usbipdcpp::UsbDevice::find_ep(std::uint8_t ep) {
     if (ep == ep0_in.address) {
-        // SPDLOG_INFO("找到端口0{}", ep);
+        // SPDLOG_INFO("Found endpoint 0 {}", ep);
         return std::make_pair(ep0_in, std::nullopt);
     }
     else if (ep == ep0_out.address) {

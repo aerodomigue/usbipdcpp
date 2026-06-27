@@ -15,9 +15,9 @@
 
 namespace usbipdcpp {
 /**
- * @brief HID 设备接口处理器基类
+ * @brief HID device interface handler base class
  *
- * 提供中断传输的默认实现，用户只需实现报告描述符和控制请求处理。
+ * Provides a default implementation for interrupt transfers; users only need to implement the report descriptor and control request handling.
  */
 class USBIPDCPP_API HidVirtualInterfaceHandler : public VirtualInterfaceHandler {
 public:
@@ -25,7 +25,7 @@ public:
         VirtualInterfaceHandler(handle_interface, string_pool) {
     }
 
-    // ========== 内部实现（子类无需关心） ==========
+    // ========== Internal implementation (subclasses do not need to care) ==========
 
     void handle_non_standard_request_type_control_urb(std::uint32_t seqnum, const UsbEndpoint &ep,
                                                       std::uint32_t transfer_flags,
@@ -34,10 +34,10 @@ public:
                                                       std::error_code &ec) override;
 
     /**
-     * @brief 处理中断传输（默认实现）
+     * @brief Handle interrupt transfers (default implementation)
      *
-     * 中断 IN：主机请求输入报告，调用 on_input_report_requested() 获取数据
-     * 中断 OUT：主机发送输出报告，调用 on_output_report_received()
+     * Interrupt IN: host requests an input report, calls on_input_report_requested() to get data
+     * Interrupt OUT: host sends an output report, calls on_output_report_received()
      */
     void handle_interrupt_transfer(std::uint32_t seqnum, const UsbEndpoint &ep, std::uint32_t transfer_flags,
                                    std::uint32_t transfer_buffer_length, TransferHandle transfer,
@@ -54,54 +54,54 @@ public:
 
     [[nodiscard]] data_type get_class_specific_descriptor() override;
 
-    // ========== 子类必须实现的虚函数 ==========
+    // ========== Virtual functions that subclasses must implement ==========
 
     /**
-     * @brief 获取 HID 报告描述符
-     * @return 报告描述符数据
+     * @brief Get the HID report descriptor
+     * @return Report descriptor data
      */
     virtual data_type get_report_descriptor() = 0;
 
     /**
-     * @brief 获取 HID 报告描述符大小
-     * @return 描述符长度（字节）
+     * @brief Get the HID report descriptor size
+     * @return Descriptor length in bytes
      */
     virtual std::uint16_t get_report_descriptor_size() = 0;
 
-    // ========== 发送数据 API ==========
+    // ========== Send data API ==========
 
     /**
-     * @brief 发送输入报告（零拷贝）
+     * @brief Send an input report (zero-copy)
      *
-     * 如果有队列中的请求，立即响应第一个；否则存储数据等待下一个请求。
+     * If there are queued requests, immediately respond to the first one; otherwise store the data and wait for the next request.
      *
-     * @param data 报告数据（可以使用栈上的 std::array + asio::buffer）
+     * @param data Report data (can use stack-allocated std::array + asio::buffer)
      */
     void send_input_report(asio::const_buffer data);
 
-    // ========== 子类可选重写的回调 ==========
+    // ========== Optional overridable callbacks for subclasses ==========
 
     /**
-     * @brief 主机请求输入报告时回调
+     * @brief Callback when the host requests an input report
      *
-     * @warning 每次主机轮询中断端点时都会调用此函数。在函数内部
-     *          因没有获取任何锁可以直接调用send_input_report等函数。
-     *          如果每次调用都调用send_input_report()，主机会立即取走数据并再次轮询，
-     *          这会导致 CPU 占用非常高。非特殊情况请不要在这个函数中
-     *          每次都调用 send_input_report()。
+     * @warning This function is called every time the host polls the interrupt endpoint. Inside this function,
+     *          since no locks are held, you can directly call send_input_report and similar functions.
+     *          If send_input_report() is called on every invocation, the host will immediately retrieve the data
+     *          and poll again, causing very high CPU usage. Unless in special circumstances, do not call
+     *          send_input_report() every time this function is invoked.
      *
-     * @param length 主机请求的数据长度
+     * @param length The data length requested by the host
      */
     virtual void on_input_report_requested(std::uint16_t length);
 
     /**
-     * @brief 收到输出报告时回调
+     * @brief Callback when an output report is received
      *
-     * @param data 输出报告数据
+     * @param data Output report data
      */
     virtual void on_output_report_received(asio::const_buffer data);
 
-    // ========== HID 类特定请求（子类可选重写） ==========
+    // ========== HID class-specific requests (optional override for subclasses) ==========
 
     /**
      * @brief Rarely implemented, this is optional for unbooted devices
@@ -133,7 +133,7 @@ public:
                                        std::uint32_t *p_status);
     virtual void request_set_idle(std::uint8_t speed, std::uint32_t *p_status);
 
-    // ========== 标准请求默认实现 ==========
+    // ========== Standard request default implementations ==========
 
     void request_clear_feature(std::uint16_t feature_selector, std::uint32_t *p_status) override {
         *p_status = 0;
@@ -172,7 +172,7 @@ public:
         *p_status = static_cast<std::uint32_t>(UrbStatusType::StatusEPIPE);
     }
 
-    // ========== 内部实现（子类无需关心） ==========
+    // ========== Internal implementation (subclasses do not need to care) ==========
 
     void on_disconnection(std::error_code &ec) override;
 
@@ -180,12 +180,12 @@ public:
 
 protected:
     /**
-     * @brief 保护 pending_input_report_ 的互斥锁
+     * @brief Mutex protecting pending_input_report_
      */
     mutable std::mutex input_mutex_;
 
     /**
-     * @brief 待发送的输入报告队列
+     * @brief Queue of pending input reports to be sent
      */
     std::deque<data_type> pending_input_reports_;
 

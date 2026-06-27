@@ -11,7 +11,7 @@
 
 using namespace usbipdcpp;
 
-// ========== TransferHandle 实现 ==========
+// ========== TransferHandle implementation ==========
 
 TransferHandle::TransferHandle(void *handle, TransferOperator *op) : handle_(handle), op_(op) {
 }
@@ -51,7 +51,7 @@ void *TransferHandle::release() {
     return tmp;
 }
 
-// ========== 其他协议实现 ==========
+// ========== Other protocol implementations ==========
 
 const usbipdcpp::TransferErrorCategory g_error_category;
 
@@ -212,7 +212,7 @@ void UsbIpResponse::UsbIpRetSubmit::to_socket(asio::ip::tcp::socket &sock, error
     auto data1 = array_add_padding<8>(
             to_network_array(header.to_bytes(), status, actual_length, start_frame, number_of_packets, error_count));
 
-    // 从 transfer 获取数据
+    // Retrieve data from transfer
     if (transfer && actual_length > 0) [[likely]] {
         auto *op = transfer.get_operator();
         void *raw_handle = transfer.get();
@@ -380,25 +380,25 @@ void UsbIpCommand::UsbIpCmdSubmit::to_socket(asio::ip::tcp::socket &sock, error_
 }
 
 void UsbIpCommand::UsbIpCmdSubmit::from_socket(asio::ip::tcp::socket &sock) {
-    // 使用 scatter-gather 一次性读取固定部分
-    // header 字段(16字节) + transfer参数(20字节) + setup(8字节) = 44字节
+    // Use scatter-gather to read the fixed portion in one call
+    // header fields (16 bytes) + transfer parameters (20 bytes) + setup (8 bytes) = 44 bytes
     decltype(SetupPacket{}.to_bytes()) setup_buffer;
     unsigned_integral_and_array_read_from_socket(sock, header.seqnum, header.devid, header.direction, header.ep,
                                                  transfer_flags, transfer_buffer_length, start_frame, number_of_packets,
                                                  interval, setup_buffer);
-    // 设置命令类型
+    // Set command type
     header.command = USBIP_CMD_SUBMIT;
 
-    // 解析 setup packet（小端序）
+    // Parse setup packet (little-endian)
     setup = SetupPacket::parse(setup_buffer);
 
-    // 检查缓冲区大小，防止恶意大内存分配
+    // Check buffer size to prevent malicious large memory allocation
     if (transfer_buffer_length > USBIPDCPP_MAX_TRANSFER_BUFFER_SIZE) [[unlikely]] {
         throw std::system_error(std::make_error_code(std::errc::no_buffer_space), "transfer_buffer_length too large");
     }
 
-    // 从路由 op 拿到对应端点的 leaf op，用它创建 transfer_handle
-    // header.ep 是 USB/IP 线格式（不带方向位），需还原真实端点地址再查表
+    // Get the leaf op for the corresponding endpoint from the routing op, use it to create transfer_handle
+    // header.ep is in USB/IP wire format (without direction bit), need to restore real endpoint address before lookup
     int num_iso = (number_of_packets != 0 && number_of_packets != 0xFFFFFFFF) ? static_cast<int>(number_of_packets) : 0;
     auto *routing_op = transfer.get_operator();
     std::uint8_t real_ep = static_cast<std::uint8_t>(header.ep);
@@ -406,11 +406,11 @@ void UsbIpCommand::UsbIpCmdSubmit::from_socket(asio::ip::tcp::socket &sock) {
         real_ep |= 0x80;
     auto *leaf_op = routing_op->get_operator_for_ep(real_ep);
     auto *raw_handle = leaf_op->alloc_transfer_handle(transfer_buffer_length, num_iso, header, setup);
-    // 将 handle 绑定到 leaf op，后续 I/O 操作直接走 leaf op，无需 map 查找
+    // Bind the handle to the leaf op so subsequent I/O operations go directly through leaf op without map lookup
     transfer.set_handle(raw_handle, leaf_op);
 
-    // 数据传输统一由 recv_transfer_data 处理（数据 + iso 描述符）
-    // IN 方向 client 不发送数据，长度传 0
+    // Data transfer is uniformly handled by recv_transfer_data (data + iso descriptors)
+    // IN direction: client sends no data, pass length 0
     std::error_code ec;
     leaf_op->recv_transfer_data(raw_handle, sock, header.direction == UsbIpDirection::In ? 0 : transfer_buffer_length,
                                 ec);
@@ -430,10 +430,10 @@ void UsbIpCommand::UsbIpCmdUnlink::to_socket(asio::ip::tcp::socket &sock, error_
 }
 
 void UsbIpCommand::UsbIpCmdUnlink::from_socket(asio::ip::tcp::socket &sock) {
-    // 使用 scatter-gather 一次性读取 header 字段 + unlink_seqnum + padding
+    // Use scatter-gather to read header fields + unlink_seqnum + padding in one call
     unsigned_integral_and_array_read_from_socket<24>(sock, header.seqnum, header.devid, header.direction, header.ep,
                                                      unlink_seqnum);
-    // 设置命令类型
+    // Set command type
     header.command = USBIP_CMD_UNLINK;
 }
 
@@ -446,7 +446,7 @@ usbipdcpp::UsbIpCommand::OpCmdVariant usbipdcpp::UsbIpCommand::get_op_from_socke
             return OpCmdVariant{};
         }
         auto op = read_u16(sock);
-        SPDLOG_DEBUG("收到op: 0x{:04x}", op);
+        SPDLOG_DEBUG("Received op: 0x{:04x}", op);
 
         switch (op) {
             case OP_REQ_DEVLIST: {
@@ -467,7 +467,7 @@ usbipdcpp::UsbIpCommand::OpCmdVariant usbipdcpp::UsbIpCommand::get_op_from_socke
             }
         }
     } catch (const asio::system_error &e) {
-        SPDLOG_DEBUG("asio错误：{}", e.what());
+        SPDLOG_DEBUG("asio error: {}", e.what());
         if (e.code() == asio::error::eof) {
             ec = make_error_code(ErrorType::SOCKET_EOF);
         }
@@ -484,12 +484,12 @@ usbipdcpp::UsbIpCommand::CmdVariant usbipdcpp::UsbIpCommand::get_cmd_from_socket
 
     try {
         auto command = read_u32(sock);
-        SPDLOG_DEBUG("收到command: 0x{:04x}", command);
+        SPDLOG_DEBUG("Received command: 0x{:04x}", command);
 
         switch (command) {
             case USBIP_CMD_SUBMIT: {
                 auto cmd = UsbIpCmdSubmit{};
-                // 提前设置operator防止空指针
+                // Set operator in advance to prevent null pointer
                 cmd.transfer.set_operator(handler->get_transfer_operator());
                 cmd.from_socket(sock);
                 return cmd;
@@ -507,7 +507,7 @@ usbipdcpp::UsbIpCommand::CmdVariant usbipdcpp::UsbIpCommand::get_cmd_from_socket
             }
         }
     } catch (const asio::system_error &e) {
-        SPDLOG_DEBUG("asio错误：{}", e.what());
+        SPDLOG_DEBUG("asio error: {}", e.what());
         if (e.code() == asio::error::eof) {
             ec = make_error_code(ErrorType::SOCKET_EOF);
         }

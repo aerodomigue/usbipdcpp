@@ -11,16 +11,16 @@
 namespace usbipdcpp {
 
 /**
- * @brief 相对坐标鼠标虚拟设备处理器
+ * @brief Relative coordinate mouse virtual device handler
  *
- * 提供基于相对偏移的鼠标操作 API。移动量累积到主机读取为止，
- * 多次 move() 调用会自动叠加，报告发送后归零。
+ * Provides a mouse operation API based on relative offsets. Movement amounts accumulate until the host reads them;
+ * multiple move() calls are automatically summed and reset to zero after the report is sent.
  *
- * HID 报告格式（6 字节）：
- *   [0]    按钮 (bit0:左, bit1:右, bit2:中, bit3:侧, bit4:额外) + 3位填充
- *   [1-2]  X 轴相对移动 (-32767~32767，小端)
- *   [3-4]  Y 轴相对移动 (-32767~32767，小端)
- *   [5]    滚轮 (-127~127)
+ * HID report format (6 bytes):
+ *   [0]    Buttons (bit0:left, bit1:right, bit2:middle, bit3:side, bit4:extra) + 3 bits padding
+ *   [1-2]  X-axis relative movement (-32767~32767, little-endian)
+ *   [3-4]  Y-axis relative movement (-32767~32767, little-endian)
+ *   [5]    Scroll wheel (-127~127)
  */
 class USBIPDCPP_API RelativeMouseHandler : public HidVirtualInterfaceHandler {
 public:
@@ -33,9 +33,9 @@ public:
     std::uint16_t get_report_descriptor_size() override;
     data_type get_report_descriptor() override;
 
-    /// 累积相对移动偏移量，clamp 到 [-32767, 32767]，主机取走前持续累积
+    /// Accumulate relative movement offset, clamped to [-32767, 32767]; keeps accumulating until the host reads it
     void move(std::int16_t dx, std::int16_t dy);
-    /// 累积滚轮偏移量，clamp 到 [-127, 127]
+    /// Accumulate scroll wheel offset, clamped to [-127, 127]
     void set_wheel(std::int8_t delta);
 
     void set_left_button(bool pressed);
@@ -44,7 +44,7 @@ public:
     void set_side_button(bool pressed);
     void set_extra_button(bool pressed);
 
-    /// 按下 → 延迟 → 释放
+    /// Press → delay → release
     void left_click(int delay_ms = 50);
     void right_click(int delay_ms = 50);
     void middle_click(int delay_ms = 50);
@@ -80,7 +80,7 @@ public:
     };
     RelativeDataState get_relative_data_state() const;
 
-    /// 等待客户端连接
+    /// Wait for a client to connect
     bool wait_for_client(int timeout_ms = -1);
 
 private:
@@ -100,7 +100,7 @@ private:
     };
 
     void notify();
-    // 不会更改按钮状态，纯发送
+    // Does not change button state, pure send
     void send_report();
 
     data_type report_descriptor;

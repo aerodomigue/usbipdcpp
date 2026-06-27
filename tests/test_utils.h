@@ -10,7 +10,7 @@
 namespace usbipdcpp {
 namespace test {
 
-// 测试专用比较函数
+// Comparison functions dedicated to testing
 inline void expect_header_equal(const UsbIpHeaderBasic &actual, const UsbIpHeaderBasic &expected) {
     EXPECT_EQ(actual.command, expected.command);
     EXPECT_EQ(actual.seqnum, expected.seqnum);
@@ -46,7 +46,7 @@ inline void expect_cmd_unlink_equal(const UsbIpCommand::UsbIpCmdUnlink &actual,
         std::thread sender([&]() {
             auto sock = acceptor.accept();
             usbipdcpp::data_type buffer;
-            // 发送版本号 + 命令码
+            // Send version number + command code
             usbipdcpp::vector_append_to_net(buffer, static_cast<std::uint16_t>(USBIP_VERSION));
             usbipdcpp::vector_append_to_net(buffer, (std::uint16_t) cmd);
             auto data = origin.to_bytes();

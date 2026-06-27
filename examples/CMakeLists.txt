@@ -1,4 +1,4 @@
-# 示例 exe 输出到构建根目录，与 DLL 同目录，避免找不到 dll
+# Output example executables to the build root directory, same directory as DLLs, to avoid missing DLLs
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 find_package(cxxopts CONFIG)
@@ -47,12 +47,12 @@ else ()
     message(WARNING "cxxopts not found, skipping all examples that need it")
 endif ()
 
-# termux 由 termux-usb 程序调用，参数固定(argc=2, argv[1]=fd)，不需要 cxxopts
+# termux is called by the termux-usb program with fixed arguments (argc=2, argv[1]=fd), cxxopts is not needed
 if (USBIPDCPP_BUILD_LIBUSB_COMPONENTS AND USBIPDCPP_BUILD_EXAMPLE_TERMUX_LIBUSB_SERVER)
     add_subdirectory(termux_libusb_server)
 endif ()
 
-# 安装示例可执行文件（默认关闭，发布包时开启）
+# Install example executables (disabled by default, enable for release packages)
 if(USBIPDCPP_INSTALL_EXAMPLES)
     if(TARGET mock_mouse)
         install(TARGETS mock_mouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

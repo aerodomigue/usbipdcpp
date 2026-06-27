@@ -19,7 +19,7 @@ GamepadHandler::GamepadHandler(UsbInterface &handle_interface, StringPool &strin
             // Collection (Application)
             0xA1,
             0x01,
-            // --- 按钮 1-16 ---
+            // --- Buttons 1-16 ---
             // Usage Page (Button)
             0x05,
             0x09,
@@ -66,7 +66,7 @@ GamepadHandler::GamepadHandler(UsbInterface &handle_interface, StringPool &strin
             // Input (Data,Var,Null State)
             0x81,
             0x42,
-            // --- 模拟轴 X/Y/Z/Rz ---
+            // --- Analog axes X/Y/Z/Rz ---
             // Usage Page (Generic Desktop)
             0x05,
             0x01,
@@ -123,12 +123,12 @@ void GamepadHandler::on_new_connection(Session &current_session, error_code &ec)
                 break;
 
             std::array<uint8_t, REPORT_SIZE> report{};
-            // 按钮位掩码（LE）
+            // Button bitmask (LE)
             report[0] = current_state_.buttons & 0xFF;
             report[1] = (current_state_.buttons >> 8) & 0xFF;
             // D-pad
             report[2] = current_state_.hat;
-            // 轴（LE）
+            // Axes (LE)
             for (uint8_t i = 0; i < NUM_AXES; ++i) {
                 uint16_t val = static_cast<uint16_t>(static_cast<int16_t>(current_state_.axes[i]));
                 report[3 + i * 2] = val & 0xFF;
@@ -177,7 +177,7 @@ data_type GamepadHandler::request_get_report(std::uint8_t type, std::uint8_t rep
     return {};
 }
 
-// ========== 按钮 API ==========
+// ========== Button API ==========
 
 void GamepadHandler::set_button(uint8_t index, bool pressed) {
     if (index >= NUM_BUTTONS)
@@ -233,7 +233,7 @@ GamepadHandler::HatDirection GamepadHandler::get_hat() const {
     return static_cast<HatDirection>(current_state_.hat);
 }
 
-// ========== 模拟轴 API ==========
+// ========== Analog axis API ==========
 
 void GamepadHandler::set_axis(uint8_t index, int16_t value) {
     if (index >= NUM_AXES)

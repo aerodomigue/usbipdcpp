@@ -70,24 +70,24 @@ int main(int argc, char **argv) {
     SPDLOG_INFO("Connect with: usbip attach -r <host> -b {}", busid);
     SPDLOG_INFO("Press Enter to exit...");
 
-    // 演示线程：D-pad 旋转 + 左摇杆画圆
+    // Demo thread: D-pad rotation + left stick circle
     std::atomic<bool> running{true};
     std::thread demo_thread([&]() {
         constexpr int steps = 16;
         int step = 0;
         while (running) {
-            // D-pad 旋转
+            // D-pad rotation
             auto hat = static_cast<GamepadHandler::HatDirection>(step % 8);
             gp.set_hat(hat);
 
-            // 左摇杆画圆
+            // Left stick draws a circle
             double angle = step * 2.0 * std::numbers::pi / steps;
             int16_t x = static_cast<int16_t>(std::sin(angle) * 16384);
             int16_t y = static_cast<int16_t>(std::cos(angle) * 16384);
             gp.set_axis(0, x);
             gp.set_axis(1, y);
 
-            // 按下按钮 0（A 键）
+            // Press button 0 (A key)
             gp.set_button(0, step % 2 == 0);
 
             step = (step + 1) % steps;
