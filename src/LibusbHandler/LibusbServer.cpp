@@ -1,6 +1,8 @@
 #include "LibusbHandler/LibusbServer.h"
 
+#include <chrono>
 #include <iostream>
+#include <thread>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
@@ -24,14 +26,19 @@ static void udp_broadcast_notify(const std::string &busid) {
     addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
     std::string msg = "ATTACH " + busid + "\n";
-    sendto(sock, msg.c_str(), msg.size(), 0, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+    // MSG_DONTWAIT: never block the libusb event thread
+    ssize_t ret = sendto(sock, msg.c_str(), msg.size(), MSG_DONTWAIT,
+                         reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+    if (ret < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+        SPDLOG_WARN("UDP broadcast failed: {}", strerror(errno));
+    else
+        SPDLOG_DEBUG("UDP broadcast: ATTACH {}", busid);
     close(sock);
-    SPDLOG_DEBUG("UDP broadcast: {}", msg);
 }
 
 namespace {
 void log_device_state(Server &server) {
-    std::lock_guard lock(server.get_devices_mutex());
+    std::shared_lock lock(server.get_devices_mutex());
     auto &available = server.get_available_devices();
     auto &using_devices = server.get_using_devices();
 
@@ -165,9 +172,13 @@ void LibusbServer::print_device(libusb_device *dev) {
 }
 
 void LibusbServer::list_host_devices() {
-    libusb_device **devs;
-    auto dev_nums = libusb_get_device_list(nullptr, &devs);
-    for (auto dev_i = 0; dev_i < dev_nums; dev_i++) {
+    libusb_device **devs = nullptr;
+    ssize_t dev_nums = libusb_get_device_list(nullptr, &devs);
+    if (dev_nums < 0) {
+        SPDLOG_ERROR("libusb_get_device_list failed: {}", libusb_strerror(static_cast<int>(dev_nums)));
+        return;
+    }
+    for (ssize_t dev_i = 0; dev_i < dev_nums; dev_i++) {
         print_device(devs[dev_i]);
         std::cout << std::endl;
     }
@@ -175,9 +186,13 @@ void LibusbServer::list_host_devices() {
 }
 
 libusb_device *LibusbServer::find_by_busid(const std::string &busid) {
-    libusb_device **devs;
-    int dev_nums = libusb_get_device_list(nullptr, &devs);
-    for (auto dev_i = 0; dev_i < dev_nums; dev_i++) {
+    libusb_device **devs = nullptr;
+    ssize_t dev_nums = libusb_get_device_list(nullptr, &devs);
+    if (dev_nums < 0) {
+        SPDLOG_ERROR("libusb_get_device_list failed: {}", libusb_strerror(static_cast<int>(dev_nums)));
+        return nullptr;
+    }
+    for (ssize_t dev_i = 0; dev_i < dev_nums; dev_i++) {
         if (get_device_busid(devs[dev_i]) == busid) {
             auto ret_dev = libusb_ref_device(devs[dev_i]);
             libusb_free_device_list(devs, 1);
@@ -203,14 +218,33 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
         return DeviceOperationResult::GetDescriptorFailed;
     }
 
+    // Never export hubs or internal Ethernet
+    if (device_descriptor.bDeviceClass == 0x09) {
+        SPDLOG_DEBUG("Skipping hub device: {}", get_device_busid(dev));
+        libusb_unref_device(dev);
+        return DeviceOperationResult::DeviceNotFound;
+    }
+    if (device_descriptor.idVendor == 0x0424 && device_descriptor.idProduct == 0xec00) {
+        SPDLOG_DEBUG("Skipping internal Ethernet: {}", get_device_busid(dev));
+        libusb_unref_device(dev);
+        return DeviceOperationResult::DeviceNotFound;
+    }
+
+    // Fetch display name before taking any lock — libusb_open() can block
+    auto [mfr, product_name] = get_device_names(dev);
+    std::string display_name = product_name.empty() ? "Unknown" : product_name;
+
     // Get configuration descriptor
-    struct libusb_config_descriptor *active_config_desc;
+    struct libusb_config_descriptor *active_config_desc = nullptr;
     err = libusb_get_active_config_descriptor(dev, &active_config_desc);
     if (err) {
         SPDLOG_WARN("Cannot get current device configuration descriptor: {}", libusb_strerror(err));
         libusb_unref_device(dev);
         return DeviceOperationResult::GetConfigFailed;
     }
+    // RAII guard: ensures active_config_desc is freed on all paths, including exceptions
+    auto config_guard = std::unique_ptr<libusb_config_descriptor,
+        decltype(&libusb_free_config_descriptor)>(active_config_desc, libusb_free_config_descriptor);
 
     // Build interface information
     SPDLOG_DEBUG("This device has {} interfaces", active_config_desc->bNumInterfaces);
@@ -238,9 +272,29 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
                                              .endpoints = std::move(endpoints)});
     }
 
+    // Capture busid here — dev is still exclusively ours before the lock;
+    // used both inside and outside the lock block so declared at this scope.
+    const std::string bound_busid = get_device_busid(dev);
+
     // Create UsbDevice and LibusbDeviceHandler
     {
         std::lock_guard lock(server.get_devices_mutex());
+
+        // Re-check under exclusive lock to prevent double-bind from concurrent hotplug + bind_existing_devices
+        const auto &busid = bound_busid;
+        for (const auto &existing : server.get_available_devices()) {
+            if (existing->busid == busid) {
+                SPDLOG_DEBUG("Device {} already bound (concurrent bind race), skipping", busid);
+                libusb_unref_device(dev);
+                return DeviceOperationResult::Success;  // config_guard frees active_config_desc
+            }
+        }
+        if (server.get_using_devices().contains(busid)) {
+            SPDLOG_DEBUG("Device {} already in use (concurrent bind race), skipping", busid);
+            libusb_unref_device(dev);
+            return DeviceOperationResult::Success;  // config_guard frees active_config_desc
+        }
+
         auto current_device = std::make_shared<UsbDevice>(UsbDevice{
                 .path = std::format("/sys/bus/{}/{}/{}", libusb_get_bus_number(dev), libusb_get_device_address(dev),
                                     libusb_get_port_number(dev)),
@@ -262,14 +316,15 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
         });
 
         // Normal mode: pass device reference (handler holds reference ownership)
+        current_device->display_name = display_name;
         current_device->with_handler<LibusbDeviceHandler>(dev);
         server.get_available_devices().emplace_back(std::move(current_device));
     }
 
-    libusb_free_config_descriptor(active_config_desc);
-    SPDLOG_INFO("Device {} added to available list", get_device_busid(dev));
+    // config_guard destructs here, freeing active_config_desc
+    SPDLOG_INFO("Device {} ({}) added to available list", bound_busid, display_name);
     log_device_state(server);
-    udp_broadcast_notify(get_device_busid(dev));
+    udp_broadcast_notify(bound_busid);
     return DeviceOperationResult::Success;
 }
 
@@ -607,33 +662,43 @@ int LIBUSB_CALL LibusbServer::hotplug_callback(libusb_context *ctx, libusb_devic
 }
 
 void LibusbServer::handle_device_arrived(libusb_device *device) {
-    auto busid = get_device_busid(device);
+    // Ref immediately — hotplug callback pointer is only valid during the callback
+    auto ref = libusb_ref_device(device);
 
-    // Check if already bound
+    // Do quick pre-checks on the event thread (no blocking I/O)
+    auto busid = get_device_busid(ref);
     {
         std::shared_lock lock(server.get_devices_mutex());
         for (const auto &dev: server.get_available_devices()) {
             if (dev->busid == busid) {
                 SPDLOG_DEBUG("Device {} is already in the bound list", busid);
+                libusb_unref_device(ref);
                 return;
             }
         }
         if (server.get_using_devices().contains(busid)) {
             SPDLOG_DEBUG("Device {} is currently in use", busid);
+            libusb_unref_device(ref);
             return;
         }
     }
 
-    // Skip hubs (class 0x09) and internal Ethernet (0424:ec00)
+    // Quick descriptor fetch to filter hubs — libusb_get_device_descriptor reads cached data, no I/O
     libusb_device_descriptor desc{};
-    if (libusb_get_device_descriptor(device, &desc) == 0) {
-        if (desc.bDeviceClass == 0x09) return;
-        if (desc.idVendor == 0x0424 && desc.idProduct == 0xec00) return;
+    if (libusb_get_device_descriptor(ref, &desc) == 0) {
+        if (desc.bDeviceClass == 0x09) { libusb_unref_device(ref); return; }
+        if (desc.idVendor == 0x0424 && desc.idProduct == 0xec00) { libusb_unref_device(ref); return; }
     }
 
     SPDLOG_INFO("Auto-binding new device: {}", busid);
-    auto ref = libusb_ref_device(device);
-    bind_host_device(ref);
+    // Dispatch bind to a worker thread — bind_host_device calls libusb_open (blocking I/O)
+    // which must NOT run on the libusb event thread or it will deadlock the event loop.
+    // pending_bind_threads_ guards against stop() destroying `this` under the thread.
+    pending_bind_threads_.fetch_add(1, std::memory_order_relaxed);
+    std::thread([this, ref]() {
+        bind_host_device(ref);
+        pending_bind_threads_.fetch_sub(1, std::memory_order_release);
+    }).detach();
 }
 
 void LibusbServer::handle_device_left(const std::string &busid) {
@@ -676,9 +741,13 @@ void LibusbServer::handle_device_left(const std::string &busid) {
 }
 
 void LibusbServer::bind_existing_devices() {
-    libusb_device **devs;
-    int dev_nums = libusb_get_device_list(nullptr, &devs);
-    for (int i = 0; i < dev_nums; i++) {
+    libusb_device **devs = nullptr;
+    ssize_t dev_nums = libusb_get_device_list(nullptr, &devs);
+    if (dev_nums < 0) {
+        SPDLOG_ERROR("libusb_get_device_list failed: {}", libusb_strerror(static_cast<int>(dev_nums)));
+        return;
+    }
+    for (ssize_t i = 0; i < dev_nums; i++) {
         libusb_device_descriptor desc{};
         if (libusb_get_device_descriptor(devs[i], &desc) != 0) continue;
         if (desc.bDeviceClass == 0x09) continue;
@@ -722,6 +791,12 @@ void LibusbServer::start(asio::ip::tcp::endpoint &ep) {
 
 void LibusbServer::stop() {
     stop_hotplug_monitor();
+
+    // Wait for any in-flight hotplug bind worker threads to finish before
+    // destroying this object — they capture `this` and call bind_host_device
+    while (pending_bind_threads_.load(std::memory_order_acquire) > 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
     server.stop();
     SPDLOG_INFO("usbip server stopped");
 

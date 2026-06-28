@@ -13,18 +13,8 @@ using namespace usbipdcpp;
 // Normal mode constructor
 usbipdcpp::LibusbDeviceHandler::LibusbDeviceHandler(UsbDevice &handle_device, libusb_device *native_device) :
     AbstDeviceHandler(handle_device, std::make_unique<LibusbTransferOperator>()), native_device_(native_device) {
-    libusb_device_descriptor desc{};
-    if (libusb_get_device_descriptor(native_device, &desc) == 0) {
-        libusb_device_handle *h = nullptr;
-        char product[256] = {};
-        if (libusb_open(native_device, &h) == 0) {
-            if (desc.iProduct)
-                libusb_get_string_descriptor_ascii(h, desc.iProduct,
-                    reinterpret_cast<unsigned char *>(product), sizeof(product));
-            libusb_close(h);
-        }
-        handle_device.display_name = product[0] ? product : "Unknown";
-    }
+    // display_name is populated by bind_host_device() before taking the devices_mutex,
+    // so no blocking I/O happens here inside the constructor.
 }
 
 // Android mode constructor

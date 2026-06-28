@@ -234,13 +234,13 @@ asio::awaitable<void> usbipdcpp::Server::do_accept(asio::ip::tcp::acceptor &acce
 
             // TCP keepalive: detect dead clients (e.g. Windows reboot) and release stuck devices
             {
-                int fd = session->socket.native_handle();
-                int val = 1;
-                setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val));
-                int idle = 120, interval = 15, count = 10;
-                setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE,  &idle,     sizeof(idle));
-                setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
-                setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT,   &count,    sizeof(count));
+                auto fd = session->socket.native_handle();
+                int val = 1, idle = 120, interval = 15, count = 10;
+                if (setsockopt(fd, SOL_SOCKET,  SO_KEEPALIVE,  &val,      sizeof(val))      < 0 ||
+                    setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE,  &idle,     sizeof(idle))     < 0 ||
+                    setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval)) < 0 ||
+                    setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT,   &count,    sizeof(count))    < 0)
+                    SPDLOG_WARN("Failed to set TCP keepalive: {}", strerror(errno));
             }
 
             {

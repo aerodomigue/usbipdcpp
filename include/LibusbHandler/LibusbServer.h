@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <asio.hpp>
 #include <libusb-1.0/libusb.h>
@@ -237,6 +238,7 @@ protected:
     libusb_hotplug_callback_handle hotplug_handle_ = 0;
     bool hotplug_enabled_ = false;
     bool hotplug_enabled_by_user_ = true;  // User-controlled switch, enabled by default
+    std::atomic<int> pending_bind_threads_{0};  // tracks detached bind worker threads
 
     void start_hotplug_monitor();
     void stop_hotplug_monitor();
