@@ -66,20 +66,32 @@ void log_device_state(Server &server) {
 
 LibusbServer::LibusbServer() {
     server.register_session_exit_callback([this]() {
-        std::lock_guard lock(server.get_devices_mutex());
-        auto &server_available_devices = server.get_available_devices();
-        for (auto it = server_available_devices.begin(); it != server_available_devices.end();) {
-            bool removed = false;
-            if (auto libusb_handle = std::dynamic_pointer_cast<LibusbDeviceHandler>((*it)->handler)) {
-                if (libusb_handle->device_removed) {
-                    it = server_available_devices.erase(it);
-                    removed = true;
+        // Cleanup stale available_devices entries for physically removed devices
+        {
+            std::lock_guard lock(server.get_devices_mutex());
+            auto &server_available_devices = server.get_available_devices();
+            for (auto it = server_available_devices.begin(); it != server_available_devices.end();) {
+                bool removed = false;
+                if (auto libusb_handle = std::dynamic_pointer_cast<LibusbDeviceHandler>((*it)->handler)) {
+                    if (libusb_handle->device_removed) {
+                        it = server_available_devices.erase(it);
+                        removed = true;
+                    }
+                }
+                if (!removed) {
+                    ++it;
                 }
             }
-            if (!removed) {
-                ++it;
-            }
         }
+
+        // After a session exits, a physically-removed device may have already
+        // reconnected while it was still in using_devices (causing handle_device_arrived
+        // to skip it). Re-enumerate now to catch that race.
+        pending_bind_threads_.fetch_add(1, std::memory_order_relaxed);
+        std::thread([this]() {
+            bind_existing_devices();
+            pending_bind_threads_.fetch_sub(1, std::memory_order_release);
+        }).detach();
     });
 }
 
@@ -767,7 +779,11 @@ void LibusbServer::start(asio::ip::tcp::endpoint &ep) {
 
     libusb_event_thread = std::thread([this]() {
         try {
-            SPDLOG_INFO("Starting libusb event loop thread for libusb device handle");
+            // Workaround: spdlog 1.15.2 on ARMv7 emits duplicate output for the
+            // very first SPDLOG_INFO call from a new thread. Accessing the logger
+            // once before logging initialises its internal state and prevents it.
+            (void)spdlog::default_logger();
+            SPDLOG_INFO("Starting libusb event loop thread");
             while (!should_exit_libusb_event_thread) {
                 auto ret = libusb_handle_events(nullptr);
 
