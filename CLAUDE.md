@@ -64,9 +64,13 @@ Auto-attaches USB/IP devices from the Pi and detaches on shutdown.
 ```
 
 ### Install
+Note: Windows services cannot run from network shares — copy the exe locally first.
+Use `sc.exe` in PowerShell (`sc` is an alias for `Set-Content`).
 ```powershell
-sc create UsbIpAutoService binPath= "C:\path\to\UsbIpAutoService.exe" start= auto DisplayName= "USB/IP Auto Attach"
-sc start UsbIpAutoService
+Copy-Item ".\UsbIpAutoService.exe" "C:\KVM\UsbIpAutoService.exe"
+sc.exe create UsbIpAutoService binPath= "C:\KVM\UsbIpAutoService.exe" start= auto DisplayName= "USB/IP Auto Attach"
+sc.exe triggerinfo UsbIpAutoService start/networkon stop/networkoff
+sc.exe start UsbIpAutoService
 ```
 
 ### Uninstall
