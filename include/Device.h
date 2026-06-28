@@ -55,6 +55,8 @@ struct USBIPDCPP_API UsbDevice {
      */
     std::shared_ptr<AbstDeviceHandler> handler;
 
+    std::string display_name{};
+
     /**
      * @brief Create and set the handler.
      * This function is the recommended way to set the handler.

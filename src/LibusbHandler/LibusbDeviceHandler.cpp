@@ -13,7 +13,18 @@ using namespace usbipdcpp;
 // Normal mode constructor
 usbipdcpp::LibusbDeviceHandler::LibusbDeviceHandler(UsbDevice &handle_device, libusb_device *native_device) :
     AbstDeviceHandler(handle_device, std::make_unique<LibusbTransferOperator>()), native_device_(native_device) {
-    // Device not yet opened; will be opened in on_new_connection
+    libusb_device_descriptor desc{};
+    if (libusb_get_device_descriptor(native_device, &desc) == 0) {
+        libusb_device_handle *h = nullptr;
+        char product[256] = {};
+        if (libusb_open(native_device, &h) == 0) {
+            if (desc.iProduct)
+                libusb_get_string_descriptor_ascii(h, desc.iProduct,
+                    reinterpret_cast<unsigned char *>(product), sizeof(product));
+            libusb_close(h);
+        }
+        handle_device.display_name = product[0] ? product : "Unknown";
+    }
 }
 
 // Android mode constructor
@@ -286,7 +297,7 @@ void usbipdcpp::LibusbDeviceHandler::handle_unlink_seqnum(std::uint32_t unlink_s
 
 int usbipdcpp::LibusbDeviceHandler::tweak_clear_halt_cmd(const SetupPacket &setup_packet) {
     auto target_endp = setup_packet.index;
-    SPDLOG_INFO("tweak_clear_halt_cmd");
+    SPDLOG_DEBUG("tweak_clear_halt_cmd");
 
     auto err = libusb_clear_halt(native_handle, target_endp);
     if (err) [[unlikely]] {
@@ -491,7 +502,7 @@ void LIBUSB_CALL usbipdcpp::LibusbDeviceHandler::transfer_callback(libusb_transf
             }
             break;
         case LIBUSB_TRANSFER_CANCELLED:
-            dev_info(libusb_get_device(trx->dev_handle), "unlinked by a call to usb_unlink_urb()");
+            dev_dbg(libusb_get_device(trx->dev_handle), "unlinked by a call to usb_unlink_urb()");
             break;
         case LIBUSB_TRANSFER_STALL:
             dev_err(libusb_get_device(trx->dev_handle), "endpoint {} is stalled", trx->endpoint);

@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     auto result = parse_example_args(opts, argc, argv);
     auto port = result["port"].as<std::uint16_t>();
 
-    spdlog::set_level(spdlog::level::trace);
+    spdlog::set_level(spdlog::level::info);
 
     int err;
     // Enable libusb debug logging

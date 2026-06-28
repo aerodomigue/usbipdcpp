@@ -2,6 +2,7 @@
 
 #include <thread>
 #include <iostream>
+#include <netinet/tcp.h>
 
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
@@ -196,7 +197,7 @@ void usbipdcpp::Server::remove_session(Session *session) {
 
 asio::awaitable<void> usbipdcpp::Server::do_accept(asio::ip::tcp::acceptor &acceptor) {
     while (true) {
-        spdlog::info("Waiting for a new connection...");
+        SPDLOG_DEBUG("Waiting for a new connection...");
 
         // Create a Session first, which also creates its own internal socket
         auto session = std::make_shared<Session>(*this);
@@ -231,6 +232,17 @@ asio::awaitable<void> usbipdcpp::Server::do_accept(asio::ip::tcp::acceptor &acce
                 }
             }
 
+            // TCP keepalive: detect dead clients (e.g. Windows reboot) and release stuck devices
+            {
+                int fd = session->socket.native_handle();
+                int val = 1;
+                setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val));
+                int idle = 120, interval = 15, count = 10;
+                setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE,  &idle,     sizeof(idle));
+                setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
+                setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT,   &count,    sizeof(count));
+            }
+
             {
                 std::lock_guard lock(session_list_mutex);
                 sessions.emplace_back(session);
@@ -238,7 +250,7 @@ asio::awaitable<void> usbipdcpp::Server::do_accept(asio::ip::tcp::acceptor &acce
             auto remote_endpoint = session->socket.remote_endpoint();
             auto remote_endpoint_name = std::format("{}:{}", remote_endpoint.address().to_string(),
                                                     remote_endpoint.port());
-            spdlog::info("A new connection from {}", remote_endpoint_name);
+            SPDLOG_DEBUG("New TCP connection from {}", remote_endpoint_name);
 
             // The function returns immediately, but it has captured its own shared_ptr internally so it won't be destroyed
             // Each session starts its own thread to prevent blocking operations from affecting other devices

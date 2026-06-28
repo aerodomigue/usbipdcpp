@@ -1,12 +1,33 @@
 #include "LibusbHandler/LibusbServer.h"
 
 #include <iostream>
-
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 #include "LibusbHandler/LibusbDeviceHandler.h"
 #include "LibusbHandler/tools.h"
 
 using namespace usbipdcpp;
+
+static constexpr int UDP_NOTIFY_PORT = 3241;
+
+static void udp_broadcast_notify(const std::string &busid) {
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) return;
+
+    int broadcast = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
+
+    sockaddr_in addr{};
+    addr.sin_family      = AF_INET;
+    addr.sin_port        = htons(UDP_NOTIFY_PORT);
+    addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+
+    std::string msg = "ATTACH " + busid + "\n";
+    sendto(sock, msg.c_str(), msg.size(), 0, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+    close(sock);
+    SPDLOG_DEBUG("UDP broadcast: {}", msg);
+}
 
 namespace {
 void log_device_state(Server &server) {
@@ -19,12 +40,16 @@ void log_device_state(Server &server) {
         if (!avail_busids.empty())
             avail_busids += ", ";
         avail_busids += d->busid;
+        if (!d->display_name.empty())
+            avail_busids += " (" + d->display_name + ")";
     }
     std::string using_busids;
     for (auto &[busid, d]: using_devices) {
         if (!using_busids.empty())
             using_busids += ", ";
         using_busids += busid;
+        if (!d->display_name.empty())
+            using_busids += " (" + d->display_name + ")";
     }
 
     SPDLOG_INFO("Device status: available {} [{}] | in use {} [{}]", available.size(), avail_busids, using_devices.size(),
@@ -244,6 +269,7 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
     libusb_free_config_descriptor(active_config_desc);
     SPDLOG_INFO("Device {} added to available list", get_device_busid(dev));
     log_device_state(server);
+    udp_broadcast_notify(get_device_busid(dev));
     return DeviceOperationResult::Success;
 }
 
@@ -598,9 +624,16 @@ void LibusbServer::handle_device_arrived(libusb_device *device) {
         }
     }
 
-    // Print device information
-    SPDLOG_INFO("New device detected:");
-    print_device(device);
+    // Skip hubs (class 0x09) and internal Ethernet (0424:ec00)
+    libusb_device_descriptor desc{};
+    if (libusb_get_device_descriptor(device, &desc) == 0) {
+        if (desc.bDeviceClass == 0x09) return;
+        if (desc.idVendor == 0x0424 && desc.idProduct == 0xec00) return;
+    }
+
+    SPDLOG_INFO("Auto-binding new device: {}", busid);
+    auto ref = libusb_ref_device(device);
+    bind_host_device(ref);
 }
 
 void LibusbServer::handle_device_left(const std::string &busid) {
@@ -642,8 +675,24 @@ void LibusbServer::handle_device_left(const std::string &busid) {
     }
 }
 
+void LibusbServer::bind_existing_devices() {
+    libusb_device **devs;
+    int dev_nums = libusb_get_device_list(nullptr, &devs);
+    for (int i = 0; i < dev_nums; i++) {
+        libusb_device_descriptor desc{};
+        if (libusb_get_device_descriptor(devs[i], &desc) != 0) continue;
+        if (desc.bDeviceClass == 0x09) continue;
+        if (desc.idVendor == 0x0424 && desc.idProduct == 0xec00) continue;
+        auto busid = get_device_busid(devs[i]);
+        SPDLOG_INFO("Auto-binding existing device: {}", busid);
+        bind_host_device(libusb_ref_device(devs[i]));
+    }
+    libusb_free_device_list(devs, 1);
+}
+
 void LibusbServer::start(asio::ip::tcp::endpoint &ep) {
     start_hotplug_monitor();
+    bind_existing_devices();
 
     should_exit_libusb_event_thread = false;
 

@@ -98,6 +98,7 @@ void usbipdcpp::Session::parse_op() {
                 }
                 else if constexpr (std::is_same_v<UsbIpCommand::OpReqImport, T>) {
                     SPDLOG_TRACE("Received OpReqImport packet");
+                    spdlog::info("Device attach request from {}", socket.remote_endpoint().address().to_string());
                     auto wanted_busid = std::string(reinterpret_cast<char *>(cmd.busid.data()));
                     UsbIpResponse::OpRepImport op_rep_import{};
                     SPDLOG_TRACE("Client wants to connect to device with busid {}", wanted_busid);
@@ -185,7 +186,7 @@ void usbipdcpp::Session::parse_op() {
 
 close_socket:
     std::error_code ignore_ec;
-    SPDLOG_INFO("Attempting to close socket");
+    SPDLOG_DEBUG("Attempting to close socket");
     socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
     socket.close(ignore_ec);
 }

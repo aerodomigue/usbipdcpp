@@ -240,6 +240,7 @@ protected:
 
     void start_hotplug_monitor();
     void stop_hotplug_monitor();
+    void bind_existing_devices();
 
     void handle_device_arrived(libusb_device *device);
     void handle_device_left(const std::string &busid);
