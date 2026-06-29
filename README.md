@@ -7,7 +7,9 @@ A C++ library for creating usbip servers
 > ✅ USBIP server: Platform-independent implementation via libusb (works wherever libusb is supported)
 > ✅ All four USB transfer types (control, bulk, interrupt, isochronous) tested and working via libusb backend
 > ✅ Virtual devices: HID (mouse, keyboard, gamepad, digitizer), MSC (USB flash drive), CDC ACM (serial port) — no libusb dependency
-> ✅ Hot-plug support: Automatic device insertion/removal detection (LibusbServer)
+> ✅ Hot-plug support: Automatic device insertion/removal detection and auto-binding (LibusbServer)
+> ✅ UDP hotplug notifications: Broadcast to LAN clients when a device becomes available (port 3241)
+> ✅ Windows auto-attach service: Automatically attaches Pi devices on boot/wake, detaches on shutdown
 
 Contributions welcome! 🚀
 
@@ -28,20 +30,6 @@ architecture using:
 
 - **asio** for asynchronous I/O
 - **libusb**'s async API for USB communications (physical devices)
-
-### Why not C++20 Coroutines
-
-An earlier version used C++20 coroutines, but they were later removed for the following reasons:
-
-1. **Architecture mismatch**: This project uses a "per-connection-one-thread" model, where each client connection has its own thread and `io_context`. The core advantage of coroutines is "single-threaded multi-tasking", which cannot be leveraged in this architecture.
-
-2. **Code complexity**: The coroutine and non-coroutine versions had nearly identical logic, but maintaining two sets of code increased maintenance burden.
-
-3. **Compilation overhead**: Coroutine-related template instantiation significantly increased compilation time.
-
-4. **ESP32 considerations**: For embedded platforms, FreeRTOS native tasks are preferred over coroutines, or a single-threaded event loop architecture should be used instead.
-
-If future requirements demand supporting hundreds or thousands of concurrent connections, refactoring to a single `io_context` + coroutine model could be considered, where coroutine benefits would truly shine.
 
 ### Dependencies
 
@@ -116,39 +104,18 @@ AbstDeviceHandler
 
 ### Threading Model
 
-Three dedicated threads ensure optimal performance:
-
-1. **Network I/O thread**: Runs `asio::io_context::run()` waiting for client connection
-2. **USB transfer thread**: Handles `libusb_handle_events()`
-3. **Main thread**: Control the behavior of usbip server, start the server
-
-Each connection starts a separate thread to prevent special synchronization operations on some devices from blocking all
-devices.
-
-Starting another thread at this point would feel like a chore. This is also possible given that a single server does not
-have a large number of usb devices.
-
-Data flows through the system without blocking:
+- **Network I/O thread**: Runs `asio::io_context::run()`, accepts connections
+- **USB event thread**: Runs `libusb_handle_events()`
+- **Per-session thread**: One thread per connected client — prevents one device from blocking others
+- **Worker threads**: Spawned for hotplug bind operations (non-blocking on event thread)
 
 ```
 Network thread → libusb_submit_transfer → USB thread → Callback → Network thread
 ```
 
-This architecture achieves high CPU efficiency by minimizing thread contention.
-
 ### Virtual Device Implementation
 
-Virtual device handlers should:
-
-- Avoid blocking the network thread
-- Process requests in worker threads
-- Submit responses via callbacks
-
-#### Why Request Queues Are Needed
-
-The client only sends URBs, and the server receives them. In the original USBIP, the server stores received URBs and the USB controller sends them to the real device in order, ensuring only one URB is being transferred at a time.
-
-Virtual devices need to simulate this "store URBs in order" behavior, so request queues (`std::deque`) are used to store received requests and process them sequentially.
+Virtual device handlers should avoid blocking the network thread — process requests in worker threads and submit responses via callbacks. Incoming URBs are queued (`std::deque`) to preserve ordering, matching real USB controller behavior.
 
 ### UVC Virtual Camera (experimental)
 
@@ -162,11 +129,6 @@ Example: `mock_uvc` — a 320×240 YUY2 virtual camera with color bar test patte
 ---
 
 ## Getting Started
-
-### Code Note
-
-> 📝 **Language notice**: Comments/logs primarily use Chinese for efficiency.  
-> The code structure remains clear and approachable. PRs for English translations appreciated!
 
 ### Extending Functionality
 
@@ -258,9 +220,12 @@ This project is ideal for implementing **virtual USB devices** on Windows.
    - Note: Windows host doesn't accept HID (0, 0), avoid screen coordinates at (x1, y1) boundary
 8. libusb_server
 
-   A usbip server which can forward all local usb devices, has a extremely simple commandline, type `h` for helps
-   and can be used to choose which device to forward. By adding virtual usb devices to share the same ubsip server
-   with physical usb devices.
+   A USB/IP server that forwards physical USB devices via libusb. Features:
+   - **Auto-bind**: Automatically binds all connected devices at startup and on hotplug
+   - **Filtering**: Skips USB hubs (class 0x09) and internal Ethernet adapters
+   - **UDP notifications**: Broadcasts `ATTACH <busid>` on port 3241 when a device is bound, so LAN clients can attach immediately
+   - **TCP keepalive**: Detects dead Windows clients (e.g. after reboot) and releases stuck devices
+   - Simple interactive CLI — type `h` for help
 9. mock_msc
 
    A virtual USB Mass Storage (flash drive) device backed by a disk image file.
@@ -298,18 +263,58 @@ This project is ideal for implementing **virtual USB devices** on Windows.
 
 ---
 
-## Pre-built Binaries
+## Raspberry Pi Deployment
 
-Pre-built packages for each platform are available on the [Releases](https://github.com/yunsmall/usbipdcpp/releases) page when a version tag is pushed.
+The `libusb_server` example is production-ready for use on a Raspberry Pi as a network USB/IP server.
 
-If you need a package without waiting for a release, or want to build from a specific commit:
+### Tested configuration
+- **Hardware**: Raspberry Pi 3B (ARMv7, 32-bit)
+- **OS**: Raspberry Pi OS Lite
+- **Build command**:
+```bash
+sudo apt install -y libasio-dev libspdlog-dev libcxxopts-dev libgtest-dev libusb-1.0-0-dev cmake g++ git
+cmake -B build -DUSBIPDCPP_USE_PKGCONF_ASIO=ON -DUSBIPDCPP_BUILD_LIBUSB_COMPONENTS=ON
+cmake --build build --target libusb_server
+```
 
-1. **Fork** this repository
-2. Go to the **Actions** tab in your fork → select **"Build packages (manual)"** → **"Run workflow"**
-3. After the workflow completes, download the artifacts for your platform
+### Run
+```bash
+sudo ./build/libusb_server -p 3240
+```
 
-> ⚠️ The `linux-aarch64` job requires an ARM64 runner, which GitHub provides for free only on **public** repositories.
-> If your fork is private, that job will be skipped; the other three platforms will still build.
+### Systemd service
+Install as a service so it starts on boot and restarts on failure.
+
+### UDP hotplug notifications
+When a USB device is plugged into the Pi, the server broadcasts `ATTACH <busid>\n` on UDP port 3241 to the LAN. Windows clients can listen for this packet and attach instantly without polling.
+
+---
+
+## Windows Auto-Attach Service
+
+`tools/windows/UsbIpAutoService.cs` is a Windows service that:
+- Attaches all USB devices exported by the Pi at startup and on wake-from-sleep
+- Listens for UDP hotplug notifications (port 3241) to attach new devices instantly
+- Runs `usbip detach --all` cleanly on shutdown, sleep and stop
+
+### Build (Windows, run as admin)
+```powershell
+& "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /out:UsbIpAutoService.exe /r:System.ServiceProcess.dll UsbIpAutoService.cs
+```
+
+### Install
+```powershell
+# Services cannot run from network shares — copy locally first
+Copy-Item ".\UsbIpAutoService.exe" "C:\KVM\UsbIpAutoService.exe"
+sc.exe create UsbIpAutoService binPath= "C:\KVM\UsbIpAutoService.exe" start= auto DisplayName= "USB/IP Auto Attach"
+sc.exe triggerinfo UsbIpAutoService start/networkon stop/networkoff
+sc.exe start UsbIpAutoService
+```
+
+### Logs
+```powershell
+Get-Content "C:\ProgramData\UsbIpAutoService\service.log" -Wait
+```
 
 ---
 
