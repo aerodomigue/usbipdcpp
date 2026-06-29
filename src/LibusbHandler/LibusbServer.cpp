@@ -242,9 +242,11 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
         return DeviceOperationResult::DeviceNotFound;
     }
 
-    // Fetch display name before taking any lock — libusb_open() can block
-    auto [mfr, product_name] = get_device_names(dev);
-    std::string display_name = product_name.empty() ? "Unknown" : product_name;
+    // Display name fetched lazily from idProduct string descriptor to avoid
+    // calling libusb_open() here — on Pi 3B, concurrent libusb_open() calls
+    // saturate the shared USB/Ethernet bus and cause network drops.
+    std::string display_name = std::format("{:04x}:{:04x}",
+        device_descriptor.idVendor, device_descriptor.idProduct);
 
     // Get configuration descriptor
     struct libusb_config_descriptor *active_config_desc = nullptr;
