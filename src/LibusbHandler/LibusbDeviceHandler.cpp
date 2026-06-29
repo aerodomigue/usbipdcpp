@@ -467,12 +467,14 @@ void LIBUSB_CALL usbipdcpp::LibusbDeviceHandler::transfer_callback(libusb_transf
         auto *handler = callback_arg.handler;
         handler->transfers_mutex_.lock();
         handler->transfers_.erase(callback_arg.seqnum);
-        handler->pending_count_.fetch_sub(1, std::memory_order_release);
         handler->transfers_mutex_.unlock();
-        callback_arg.transfer.reset(); // Release libusb_transfer to avoid deferring until next alloc
+        // Decrement AFTER pool.free so on_disconnection cannot call pool.reset()
+        // or nullify session while we still hold a reference to callback_arg.
+        callback_arg.transfer.reset();
         if (!handler->callback_args_pool_.free(&callback_arg)) {
             delete &callback_arg;
         }
+        handler->pending_count_.fetch_sub(1, std::memory_order_release);
         handler->transfer_complete_cv_.notify_one();
         return;
     }
@@ -531,7 +533,9 @@ void LIBUSB_CALL usbipdcpp::LibusbDeviceHandler::transfer_callback(libusb_transf
         unlinking = callback_arg.unlinking;
         unlink_cmd_seqnum = callback_arg.unlink_cmd_seqnum;
         handler->transfers_.erase(callback_arg.seqnum);
-        handler->pending_count_.fetch_sub(1, std::memory_order_release);
+        // pending_count_ decremented AFTER wakeup_sender() and pool.free() below —
+        // ensures on_disconnection cannot proceed (pool.reset / session=null) while
+        // this callback still needs session->wakeup_sender() or the pool slot.
 
         if (unlinking) [[unlikely]] {
             // URB was cancelled by unlink; enqueue RET_UNLINK (with actual transfer status)
@@ -579,8 +583,10 @@ void LIBUSB_CALL usbipdcpp::LibusbDeviceHandler::transfer_callback(libusb_transf
     if (!handler->callback_args_pool_.free(&callback_arg)) {
         delete &callback_arg;
     }
-    // Unconditional notify covers the race between the normal path and on_disconnection.
-    // The CV predicate pending_count_==0 ensures only the last callback actually wakes the wait.
+    // Decrement AFTER all work is done — on_disconnection can only proceed past
+    // its CV wait when pending_count_ reaches 0, guaranteeing pool and session
+    // are no longer touched by this callback.
+    handler->pending_count_.fetch_sub(1, std::memory_order_release);
     handler->transfer_complete_cv_.notify_one();
 }
 
