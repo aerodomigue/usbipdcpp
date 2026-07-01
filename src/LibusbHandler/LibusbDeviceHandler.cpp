@@ -255,12 +255,14 @@ void usbipdcpp::LibusbDeviceHandler::handle_unlink_seqnum(std::uint32_t unlink_s
         auto it = transfers_.find(unlink_seqnum);
         if (it != transfers_.end()) {
             auto *cb = it->second;
-            // Transfer still in tracker; mark unlinking and cancel under lock.
-            // When the callback runs it will see unlinking==true, take the RET_UNLINK branch, and wake the sender.
+            // Mark unlinking and cancel while still holding the shared lock.
+            // libusb_cancel_transfer() only sets a flag and does not call the callback
+            // directly, so it is safe to call under the shared lock.
+            // Do NOT release the lock before calling cancel: transfer_callback acquires
+            // an exclusive lock to erase from transfers_ and then frees cb — releasing
+            // here would create a window where cb is dangling when we dereference it.
             cb->unlinking = true;
             cb->unlink_cmd_seqnum = cmd_seqnum;
-
-            lock.unlock();
 
             int err = libusb_cancel_transfer(static_cast<libusb_transfer *>(cb->transfer.get()));
             if (err == LIBUSB_ERROR_NOT_FOUND) [[unlikely]] {
@@ -485,12 +487,15 @@ void LIBUSB_CALL usbipdcpp::LibusbDeviceHandler::transfer_callback(libusb_transf
             /* OK */
             break;
         case LIBUSB_TRANSFER_ERROR:
+            // SHORT_NOT_OK is NOT set → caller accepts short packets; libusb may report
+            // TRANSFER_ERROR when fewer bytes arrived than requested, which is normal.
+            // Treat as completed so the actual_length is forwarded correctly.
+            // SHORT_NOT_OK IS set → genuine error; keep the ERROR status.
             if (!(trx->flags & LIBUSB_TRANSFER_SHORT_NOT_OK)) {
-                dev_err(libusb_get_device(trx->dev_handle), "error on endpoint {}", trx->endpoint);
+                trx->status = LIBUSB_TRANSFER_COMPLETED;
             }
             else {
-                // Tweaking status to complete as we received data, but all
-                trx->status = LIBUSB_TRANSFER_COMPLETED;
+                dev_err(libusb_get_device(trx->dev_handle), "error on endpoint {}", trx->endpoint);
             }
             break;
         case LIBUSB_TRANSFER_CANCELLED:
@@ -647,6 +652,7 @@ bool usbipdcpp::LibusbDeviceHandler::open_and_claim_device() {
 
     libusb_free_config_descriptor(active_config_desc);
     interfaces_claimed_ = true;
+    claimed_interface_count_ = num_interfaces;
     SPDLOG_INFO("Successfully opened device and claimed {} interfaces", num_interfaces);
     return true;
 }
@@ -710,6 +716,7 @@ bool usbipdcpp::LibusbDeviceHandler::wrap_fd_and_claim_interfaces() {
 
     libusb_free_config_descriptor(active_config_desc);
     interfaces_claimed_ = true;
+    claimed_interface_count_ = num_interfaces;
     SPDLOG_INFO("Successfully wrapped fd and claimed {} interfaces", num_interfaces);
     return true;
 }
@@ -719,25 +726,24 @@ void usbipdcpp::LibusbDeviceHandler::release_and_close_device() {
         return;
     }
 
-    // Get device to query interface count
-    libusb_device *device = libusb_get_device(native_handle);
-    struct libusb_config_descriptor *active_config_desc = nullptr;
-    int num_interfaces = 0;
-    if (device && libusb_get_active_config_descriptor(device, &active_config_desc) == 0) {
-        num_interfaces = active_config_desc->bNumInterfaces;
-        libusb_free_config_descriptor(active_config_desc);
-    }
+    // Use the count stored when we claimed interfaces.
+    // Do NOT re-query libusb_get_active_config_descriptor here: if the device was
+    // physically removed, the call fails and returns 0, causing the release loop to
+    // skip entirely — kernel drivers would never be re-attached on reconnect.
+    const int num_interfaces = claimed_interface_count_;
 
-    // Release all interfaces
+    // Release all interfaces and re-attach kernel drivers.
+    // LIBUSB_ERROR_NO_DEVICE is expected on physical removal — the kernel re-attaches
+    // drivers automatically when the handle is closed, so these are silent failures.
     for (int intf_i = 0; intf_i < num_interfaces; intf_i++) {
         int err = libusb_release_interface(native_handle, intf_i);
-        if (err) {
+        if (err && err != LIBUSB_ERROR_NO_DEVICE) {
             SPDLOG_ERROR("Error releasing interface {}: {}", intf_i, libusb_strerror(err));
         }
 
-        // Re-attach kernel driver
         err = libusb_attach_kernel_driver(native_handle, intf_i);
-        if (err && err != LIBUSB_ERROR_NOT_FOUND && err != LIBUSB_ERROR_NOT_SUPPORTED) {
+        if (err && err != LIBUSB_ERROR_NOT_FOUND && err != LIBUSB_ERROR_NOT_SUPPORTED
+                && err != LIBUSB_ERROR_NO_DEVICE) {
             SPDLOG_WARN("Failed to re-attach kernel driver (interface {}): {}", intf_i, libusb_strerror(err));
         }
     }

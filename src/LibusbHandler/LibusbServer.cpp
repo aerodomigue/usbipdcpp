@@ -248,13 +248,27 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
     std::string display_name = std::format("{:04x}:{:04x}",
         device_descriptor.idVendor, device_descriptor.idProduct);
 
-    // Get configuration descriptor
+    // Get configuration descriptor — may fail transiently on fast reconnect while
+    // the device is still enumerating. Retry a few times with a short delay.
     struct libusb_config_descriptor *active_config_desc = nullptr;
-    err = libusb_get_active_config_descriptor(dev, &active_config_desc);
-    if (err) {
-        SPDLOG_WARN("Cannot get current device configuration descriptor: {}", libusb_strerror(err));
-        libusb_unref_device(dev);
-        return DeviceOperationResult::GetConfigFailed;
+    {
+        static constexpr int MAX_CONFIG_RETRIES = 5;
+        static constexpr int CONFIG_RETRY_DELAY_MS = 50;
+        for (int attempt = 0; attempt < MAX_CONFIG_RETRIES; ++attempt) {
+            err = libusb_get_active_config_descriptor(dev, &active_config_desc);
+            if (err == 0) break;
+            if (attempt + 1 < MAX_CONFIG_RETRIES) {
+                SPDLOG_DEBUG("libusb_get_active_config_descriptor failed (attempt {}/{}): {}",
+                             attempt + 1, MAX_CONFIG_RETRIES, libusb_strerror(err));
+                std::this_thread::sleep_for(std::chrono::milliseconds(CONFIG_RETRY_DELAY_MS));
+            }
+        }
+        if (err) {
+            SPDLOG_WARN("Cannot get current device configuration descriptor after {} attempts: {}",
+                        MAX_CONFIG_RETRIES, libusb_strerror(err));
+            libusb_unref_device(dev);
+            return DeviceOperationResult::GetConfigFailed;
+        }
     }
     // RAII guard: ensures active_config_desc is freed on all paths, including exceptions
     auto config_guard = std::unique_ptr<libusb_config_descriptor,
@@ -810,12 +824,15 @@ void LibusbServer::start(asio::ip::tcp::endpoint &ep) {
 void LibusbServer::stop() {
     stop_hotplug_monitor();
 
-    // Wait for any in-flight hotplug bind worker threads to finish before
-    // destroying this object — they capture `this` and call bind_host_device
+    // server.stop() must run first: it tears down active sessions, which triggers
+    // session_exit_callbacks that may spawn new bind threads (pending_bind_threads_++).
+    // Spin-waiting before server.stop() would complete prematurely, then new bind
+    // threads would race against the device cleanup below.
+    server.stop();
+
+    // Now wait for any bind threads spawned by hotplug or session_exit_callbacks.
     while (pending_bind_threads_.load(std::memory_order_acquire) > 0)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-    server.stop();
     SPDLOG_INFO("usbip server stopped");
 
     {

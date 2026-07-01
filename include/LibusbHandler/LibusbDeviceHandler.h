@@ -136,6 +136,9 @@ public:
     intptr_t wrapped_fd_ = -1;
 
     bool interfaces_claimed_ = false; // Whether interfaces have been claimed
+    int claimed_interface_count_ = 0; // Number of interfaces claimed; stored so release_and_close_device
+                                      // can iterate correctly even if the device is already removed and
+                                      // libusb_get_active_config_descriptor() would fail.
 
     /**
      * @brief Open device and claim interfaces (normal mode).

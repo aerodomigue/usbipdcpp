@@ -262,7 +262,8 @@ void AbsoluteMouseHandler::humanized_move(int from_x, int from_y, int to_x, int 
     double ctrl2_y = (mid_y + to_hid_y) / 2.0 + perp2 * perp_y + along_dist(gen) * dy / (len > 0 ? len : 1);
 
     // Cubic Bezier curve: B(t) = (1-t)^3*P0 + 3*(1-t)^2*t*P1 + 3*(1-t)*t^2*P2 + t^3*P3
-    auto bezier = [&](double t) -> std::pair<double, double> {
+    struct Point2d { double x, y; };
+    auto bezier = [&](double t) -> Point2d {
         double u = 1.0 - t;
         double x = u * u * u * from_hid_x + 3 * u * u * t * ctrl1_x + 3 * u * t * t * ctrl2_x + t * t * t * to_hid_x;
         double y = u * u * u * from_hid_y + 3 * u * u * t * ctrl1_y + 3 * u * t * t * ctrl2_y + t * t * t * to_hid_y;
