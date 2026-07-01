@@ -196,6 +196,8 @@ void usbipdcpp::Session::immediately_stop() {
 
     std::error_code ignore_ec;
     socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
+    // Wake sender thread — it waits on data_available_cv which checks should_immediately_stop
+    data_available_cv.notify_one();
     SPDLOG_INFO("Shutdown called successfully");
 }
 
@@ -312,11 +314,11 @@ void usbipdcpp::Session::receiver(usbipdcpp::error_code &receiver_ec) {
                         }
                         else {
                             SPDLOG_WARN("Cannot find endpoint {}", real_ep);
-                            UsbIpResponse::UsbIpRetSubmit ret_submit =
+                            // Route through sender queue — never write directly to socket from the receiver
+                            // thread; concurrent writes with the sender thread corrupt the stream.
+                            submit_ret_submit(
                                     UsbIpResponse::UsbIpRetSubmit::create_ret_submit_epipe_without_data(
-                                            cmd2.header.seqnum, 0);
-                            ret_submit.to_socket(socket, ec);
-                            SPDLOG_TRACE("Successfully sent UsbIpRetSubmit packet");
+                                            cmd2.header.seqnum, 0));
                         }
                     }
                     else if constexpr (std::is_same_v<UsbIpCommand::UsbIpCmdUnlink, T>) {
@@ -410,8 +412,11 @@ void usbipdcpp::Session::sender(usbipdcpp::error_code &ec) {
                 send_data);
 
         if (sending_ec) {
-            // Errors during sending are not propagated
-            // ec = sending_ec;
+            // TCP write failed — tear down the session so the receiver stops too.
+            // Without this the receiver keeps consuming URBs until keepalive fires (120 s).
+            should_immediately_stop = true;
+            std::error_code ignore_ec;
+            socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
             break;
         }
     }
