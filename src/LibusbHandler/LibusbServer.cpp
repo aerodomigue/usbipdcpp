@@ -1,6 +1,7 @@
 #include "LibusbHandler/LibusbServer.h"
 
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <thread>
 #include <arpa/inet.h>
@@ -34,6 +35,25 @@ static void udp_broadcast_notify(const std::string &busid) {
     else
         SPDLOG_DEBUG("UDP broadcast: ATTACH {}", busid);
     close(sock);
+}
+
+static void disable_usb_autosuspend(const std::string &busid) {
+    // Disable autosuspend for the device and all intermediate USB hub parents.
+    // On Pi 3B, concurrent USB/IP transfers through hub Transaction Translators
+    // cause the kernel to issue ClearTT commands when autosuspend is attempted.
+    // Those ClearTT commands fail with EPROTO (-71), cascading into a full hub
+    // disconnect. Writing -1 prevents autosuspend while the device is bound.
+    std::string current = busid;
+    while (true) {
+        std::string sysfs_path = "/sys/bus/usb/devices/" + current + "/power/autosuspend_delay_ms";
+        if (std::ofstream f(sysfs_path); f.is_open()) {
+            f << "-1\n";
+            SPDLOG_DEBUG("Disabled autosuspend for {}", current);
+        }
+        auto dot = current.rfind('.');
+        if (dot == std::string::npos) break;
+        current = current.substr(0, dot);
+    }
 }
 
 namespace {
@@ -351,6 +371,7 @@ DeviceOperationResult LibusbServer::bind_host_device(libusb_device *dev) {
 
     // config_guard destructs here, freeing active_config_desc
     SPDLOG_INFO("Device {} ({}) added to available list", bound_busid, display_name);
+    disable_usb_autosuspend(bound_busid);
     log_device_state(server);
     udp_broadcast_notify(bound_busid);
     return DeviceOperationResult::Success;

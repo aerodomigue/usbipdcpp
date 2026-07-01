@@ -748,6 +748,18 @@ void usbipdcpp::LibusbDeviceHandler::release_and_close_device() {
         }
     }
 
+    // On intentional disconnect (not physical removal): reset the device to flush
+    // stuck endpoint halt bits and hub Transaction Translator state. The Pi 3B
+    // DWC2 controller leaves TT buffers in a bad state after session teardown,
+    // which prevents the sub-hub from re-enumerating on the next connect.
+    // Physical removal returns LIBUSB_ERROR_NO_DEVICE immediately, so this is safe.
+    if (!device_removed) {
+        int reset_err = libusb_reset_device(native_handle);
+        if (reset_err && reset_err != LIBUSB_ERROR_NO_DEVICE) {
+            SPDLOG_WARN("libusb_reset_device: {}", libusb_strerror(reset_err));
+        }
+    }
+
     interfaces_claimed_ = false;
 
     // Close handle
