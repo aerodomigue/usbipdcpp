@@ -7,9 +7,9 @@ C++ USB/IP server library using libusb (userspace). Deployed on a Raspberry Pi 4
 The project lives on the Mac at the current directory. All modifications are made here.
 
 ## Target Device
-- **Host**: `usbIP` (alias) or `10.2.100.101`
+- **Host**: `usb3ip` (alias) — Raspberry Pi 4
 - **User**: `anthony`
-- **SSH**: `ssh anthony@usbIP`
+- **SSH**: `ssh anthony@usb3ip`
 - **Project path on Pi**: `~/usbipdcpp/`
 - **Binary**: `~/usbipdcpp/build/libusb_server`
 - **Service**: `usbipdcpp` (systemd)
@@ -19,27 +19,27 @@ The project lives on the Mac at the current directory. All modifications are mad
 ### 1. Sync modified files to Pi
 After any modification, sync only the source files (not the build directory):
 ```bash
-rsync -av --exclude='build/' --exclude='.git/' ./ anthony@usbIP:~/usbipdcpp/
+rsync -av --exclude='build/' --exclude='.git/' ./ anthony@usb3ip:~/usbipdcpp/
 ```
 
 ### 2. Build on Pi
 ```bash
-ssh anthony@usbIP "cd ~/usbipdcpp && cmake -B build -DUSBIPDCPP_USE_PKGCONF_ASIO=ON -DUSBIPDCPP_BUILD_LIBUSB_COMPONENTS=ON 2>/dev/null; cmake --build build --target libusb_server 2>&1 | tail -5"
+ssh anthony@usb3ip "cd ~/usbipdcpp && cmake -B build -DUSBIPDCPP_USE_PKGCONF_ASIO=ON -DUSBIPDCPP_BUILD_LIBUSB_COMPONENTS=ON 2>/dev/null; cmake --build build --target libusb_server 2>&1 | tail -5"
 ```
 
 ### 3. Test (stop service, run manually)
 ```bash
 # Stop service
-ssh anthony@usbIP "sudo systemctl stop usbipdcpp"
+ssh anthony@usb3ip "sudo systemctl stop usbipdcpp"
 
 # Run manually to see logs
-ssh anthony@usbIP "sudo ~/usbipdcpp/build/libusb_server -p 3240"
+ssh anthony@usb3ip "sudo ~/usbipdcpp/build/libusb_server -p 3240"
 ```
 
 ### 4. Deploy (replace service binary)
 When test is OK, restart the service:
 ```bash
-ssh anthony@usbIP "sudo systemctl restart usbipdcpp"
+ssh anthony@usb3ip "sudo systemctl restart usbipdcpp"
 ```
 
 ## Custom Modifications Applied
