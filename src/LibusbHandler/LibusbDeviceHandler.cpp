@@ -298,12 +298,19 @@ int usbipdcpp::LibusbDeviceHandler::tweak_clear_halt_cmd(const SetupPacket &setu
     SPDLOG_DEBUG("tweak_clear_halt_cmd");
 
     auto err = libusb_clear_halt(native_handle, target_endp);
-    if (err) [[unlikely]] {
-        SPDLOG_ERROR("libusb_clear_halt() error: endp {} returned {}", target_endp, libusb_strerror(err));
-        return 1; // positive → caller sends EPIPE (libusb errors are negative and
-                  // would be mistaken for -1 = "no tweak needed")
+    if (err == 0) {
+        SPDLOG_DEBUG("libusb_clear_halt() done: endp {}", target_endp);
+        return 0;
     }
-    SPDLOG_DEBUG("libusb_clear_halt() done: endp {}", target_endp);
+    if (err == LIBUSB_ERROR_PIPE) {
+        // CLEAR_FEATURE control transfer itself stalled — genuine endpoint failure
+        SPDLOG_ERROR("libusb_clear_halt() stalled: endp {} returned {}", target_endp, libusb_strerror(err));
+        return 1; // positive → caller sends EPIPE
+    }
+    // LIBUSB_ERROR_OTHER or similar: endpoint was not actually halted (device quirk).
+    // USB spec §9.4.5: CLEAR_FEATURE(ENDPOINT_HALT) must always be ACK'd, halted or not.
+    // Returning EPIPE here causes Windows to retry endlessly — treat as success.
+    SPDLOG_WARN("libusb_clear_halt() quirk: endp {} returned {} — treating as success", target_endp, libusb_strerror(err));
     return 0;
 }
 
