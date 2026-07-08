@@ -1,7 +1,7 @@
 # usbipdcpp - Development Guide
 
 ## Project Overview
-C++ USB/IP server library using libusb (userspace). Deployed on a Raspberry Pi 3B (32-bit ARMv7) running Raspberry Pi OS Lite.
+C++ USB/IP server library using libusb (userspace). Deployed on a Raspberry Pi 4 running Raspberry Pi OS Lite (64-bit, aarch64).
 
 ## Local Development (Mac M4)
 The project lives on the Mac at the current directory. All modifications are made here.
@@ -85,6 +85,11 @@ sc delete UsbIpAutoService
 ## Build Dependencies (on Pi)
 ```bash
 sudo apt install -y libasio-dev libspdlog-dev libcxxopts-dev libgtest-dev libusb-1.0-0-dev cmake g++ git
+```
+
+**Pi 4 first-time setup**: update VL805 USB controller firmware before use:
+```bash
+sudo rpi-eeprom-update -a && sudo reboot
 ```
 
 ## Service Management

@@ -268,8 +268,8 @@ This project is ideal for implementing **virtual USB devices** on Windows.
 The `libusb_server` example is production-ready for use on a Raspberry Pi as a network USB/IP server.
 
 ### Tested configuration
-- **Hardware**: Raspberry Pi 3B (ARMv7, 32-bit)
-- **OS**: Raspberry Pi OS Lite
+- **Hardware**: Raspberry Pi 4 (aarch64, 64-bit)
+- **OS**: Raspberry Pi OS Lite (64-bit)
 - **Build command**:
 ```bash
 sudo apt install -y libasio-dev libspdlog-dev libcxxopts-dev libgtest-dev libusb-1.0-0-dev cmake g++ git
