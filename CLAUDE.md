@@ -87,10 +87,6 @@ sc delete UsbIpAutoService
 sudo apt install -y libasio-dev libspdlog-dev libcxxopts-dev libgtest-dev libusb-1.0-0-dev cmake g++ git
 ```
 
-**Pi 4 first-time setup**: update VL805 USB controller firmware before use:
-```bash
-sudo rpi-eeprom-update -a && sudo reboot
-```
 
 ## Service Management
 ```bash
