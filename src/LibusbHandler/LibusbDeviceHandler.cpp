@@ -158,9 +158,15 @@ void usbipdcpp::LibusbDeviceHandler::receive_urb(UsbIpCommand::UsbIpCmdSubmit cm
             }
         }
         else {
-            // Whether tweak succeeded or failed, do not submit transfer
-            session->submit_ret_submit(
-                    UsbIpResponse::UsbIpRetSubmit::create_ret_submit_ok_without_data(seqnum, transfer_buffer_length));
+            // tweak_ret == 0: tweak succeeded → OK
+            // tweak_ret  > 0: tweak failed    → EPIPE so Windows knows the request failed
+            if (tweak_ret == 0) {
+                session->submit_ret_submit(
+                        UsbIpResponse::UsbIpRetSubmit::create_ret_submit_ok_without_data(seqnum, transfer_buffer_length));
+            } else {
+                session->submit_ret_submit(
+                        UsbIpResponse::UsbIpRetSubmit::create_ret_submit_epipe_without_data(seqnum, 0));
+            }
         }
     }
     else if (interface.has_value()) [[likely]] {
@@ -294,11 +300,11 @@ int usbipdcpp::LibusbDeviceHandler::tweak_clear_halt_cmd(const SetupPacket &setu
     auto err = libusb_clear_halt(native_handle, target_endp);
     if (err) [[unlikely]] {
         SPDLOG_ERROR("libusb_clear_halt() error: endp {} returned {}", target_endp, libusb_strerror(err));
+        return 1; // positive → caller sends EPIPE (libusb errors are negative and
+                  // would be mistaken for -1 = "no tweak needed")
     }
-    else {
-        SPDLOG_DEBUG("libusb_clear_halt() done: endp {}", target_endp);
-    }
-    return err; // Returns 0 on success, positive value on error
+    SPDLOG_DEBUG("libusb_clear_halt() done: endp {}", target_endp);
+    return 0;
 }
 
 int usbipdcpp::LibusbDeviceHandler::tweak_set_interface_cmd(const SetupPacket &setup_packet) {
@@ -310,22 +316,21 @@ int usbipdcpp::LibusbDeviceHandler::tweak_set_interface_cmd(const SetupPacket &s
     if (err) [[unlikely]] {
         SPDLOG_ERROR("{}: usb_set_interface error: inf {} alt {} err {}",
                      get_device_busid(libusb_get_device(native_handle)), interface, alternate, libusb_strerror(err));
+        return 1; // positive → caller sends EPIPE (libusb errors are negative)
     }
-    else {
-        SPDLOG_DEBUG("{}: usb_set_interface done: inf {} alt {}", get_device_busid(libusb_get_device(native_handle)),
-                     interface, alternate);
+    SPDLOG_DEBUG("{}: usb_set_interface done: inf {} alt {}", get_device_busid(libusb_get_device(native_handle)),
+                 interface, alternate);
 
-        // Switch current_altsetting (endpoint data already pre-filled at bind time)
-        if (interface < handle_device.interfaces.size()) {
-            auto &dev_intf = handle_device.interfaces[interface];
-            if (alternate < dev_intf.endpoints.size()) {
-                dev_intf.current_altsetting = static_cast<std::uint8_t>(alternate);
-                SPDLOG_DEBUG("Switched interface {} to alt {}, endpoint count: {}", interface, alternate,
-                             dev_intf.current_endpoints().size());
-            }
+    // Switch current_altsetting (endpoint data already pre-filled at bind time)
+    if (interface < handle_device.interfaces.size()) {
+        auto &dev_intf = handle_device.interfaces[interface];
+        if (alternate < dev_intf.endpoints.size()) {
+            dev_intf.current_altsetting = static_cast<std::uint8_t>(alternate);
+            SPDLOG_DEBUG("Switched interface {} to alt {}, endpoint count: {}", interface, alternate,
+                         dev_intf.current_endpoints().size());
         }
     }
-    return err; // Returns 0 on success, positive value on error
+    return 0;
 }
 
 int usbipdcpp::LibusbDeviceHandler::tweak_set_configuration_cmd(const SetupPacket &setup_packet) {

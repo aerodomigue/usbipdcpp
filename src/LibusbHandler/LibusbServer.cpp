@@ -781,6 +781,19 @@ void LibusbServer::bind_existing_devices() {
         if (desc.bDeviceClass == 0x09) continue;
         if (desc.idVendor == 0x0424 && desc.idProduct == 0xec00) continue;
         auto busid = get_device_busid(devs[i]);
+        // Skip devices already known to avoid log spam on every list-sessions poll.
+        // bind_host_device() also checks under exclusive lock, but the log appears
+        // before that check, flooding the output every ~10 s while devices are in use.
+        {
+            std::shared_lock lock(server.get_devices_mutex());
+            bool already_known = server.get_using_devices().contains(busid);
+            if (!already_known) {
+                for (const auto &d : server.get_available_devices()) {
+                    if (d->busid == busid) { already_known = true; break; }
+                }
+            }
+            if (already_known) continue;
+        }
         SPDLOG_INFO("Auto-binding existing device: {}", busid);
         bind_host_device(libusb_ref_device(devs[i]));
     }
