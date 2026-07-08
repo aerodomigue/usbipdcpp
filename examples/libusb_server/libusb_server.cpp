@@ -54,6 +54,7 @@ int main(int argc, char **argv) {
         sigprocmask(SIG_BLOCK, &mask, nullptr);
         int sig;
         sigwait(&mask, &sig);
+        libusb_server.stop();
         goto loop_end;
     }
 
