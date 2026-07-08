@@ -2,7 +2,9 @@
 #include "../example_utils.h"
 #include <iostream>
 #include <libusb-1.0/libusb.h>
+#include <signal.h>
 #include <spdlog/spdlog.h>
+#include <unistd.h>
 
 #include "LibusbHandler/LibusbServer.h"
 
@@ -43,9 +45,20 @@ int main(int argc, char **argv) {
     // }
 
 
+    if (!isatty(STDIN_FILENO)) {
+        // Daemon mode (no TTY): block until SIGTERM/SIGINT
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGTERM);
+        sigaddset(&mask, SIGINT);
+        sigprocmask(SIG_BLOCK, &mask, nullptr);
+        int sig;
+        sigwait(&mask, &sig);
+        goto loop_end;
+    }
+
     char cmd;
-    while (true) {
-        std::cin >> cmd;
+    while (std::cin >> cmd) {
         switch (cmd) {
             case 's': {
                 spdlog::info("There are {} sessions in this server", libusb_server.get_server().get_session_count());
