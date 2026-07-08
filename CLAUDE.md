@@ -7,7 +7,7 @@ C++ USB/IP server library using libusb (userspace). Deployed on a Raspberry Pi 4
 The project lives on the Mac at the current directory. All modifications are made here.
 
 ## Target Device
-- **Host**: `usb3ip` (alias) — Raspberry Pi 4
+- **Host**: `usb3ip` (alias) or `10.2.100.101` — Raspberry Pi 4
 - **User**: `anthony`
 - **SSH**: `ssh anthony@usb3ip`
 - **Project path on Pi**: `~/usbipdcpp/`
